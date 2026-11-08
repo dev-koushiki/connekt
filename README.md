@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CONNEKT – AI-Powered Social Networking, Communication & Productivity Platform
 
 **CONNEKT** is an integrated digital ecosystem combining social networking, communication, email, file sharing, meetings, productivity, professional networking, and AI-powered intelligence into one unified platform.
@@ -148,3 +149,6 @@ http://localhost:5000
 - [ ] **Phase 4 – Connected Services:** Connekt Mail web client, secure file sharing, WebRTC audio/video meetings & screen sharing.
 - [ ] **Phase 5 – Productivity and Intelligence:** Centralized Reminder Box, Gemini AI Assistant, Connekt Shield spam & phishing defense.
 - [ ] **Phase 6 – Expansion and Optimization:** Professional networking jobs & internships, performance tuning, and audit security testing.
+=======
+# connekt
+>>>>>>> cb8095864153b9094f5c8fdadaf964902bb75a44
