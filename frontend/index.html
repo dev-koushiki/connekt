@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CONNEKT – Unified Digital Ecosystem</title>
+  <meta name="description" content="AI-Powered Social Networking, Communication & Productivity Platform" />
+  
+  <!-- Design System & Stylesheets -->
+  <link rel="stylesheet" href="/css/themes.css" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/responsive.css" />
+</head>
+<body>
+
+  <!-- Mobile Drawer Overlay -->
+  <div id="mobileOverlay" class="mobile-overlay"></div>
+
+  <!-- Main Application Container -->
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside id="appSidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-logo">C</div>
+        <div style="display: flex; align-items: center;">
+          <span class="brand-name">CONNEKT</span>
+          <span class="brand-badge">PRO</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <div class="nav-label">Main Ecosystem</div>
+        <a href="#home" class="nav-item active" data-module="home">
+          <span class="nav-icon">🏠</span>
+          <span>Home Feed</span>
+        </a>
+        <a href="#messages" class="nav-item" data-module="messages">
+          <span class="nav-icon">💬</span>
+          <span>Messages</span>
+          <span class="nav-badge">0</span>
+        </a>
+        <a href="#communities" class="nav-item" data-module="communities">
+          <span class="nav-icon">🌐</span>
+          <span>Communities</span>
+        </a>
+        <a href="#meetings" class="nav-item" data-module="meetings">
+          <span class="nav-icon">📹</span>
+          <span>Meetings & Calls</span>
+        </a>
+        <a href="#mail" class="nav-item" data-module="mail">
+          <span class="nav-icon">✉️</span>
+          <span>Connekt Mail</span>
+        </a>
+        <a href="#reminders" class="nav-item" data-module="reminders">
+          <span class="nav-icon">⏰</span>
+          <span>Reminder Box</span>
+        </a>
+
+        <div class="nav-label">Career & Intelligence</div>
+        <a href="#network" class="nav-item" data-module="network">
+          <span class="nav-icon">💼</span>
+          <span>Professional Network</span>
+        </a>
+        <a href="#ai" class="nav-item" data-module="ai">
+          <span class="nav-icon">✨</span>
+          <span>AI Assistant</span>
+        </a>
+        <a href="#shield" class="nav-item" data-module="shield">
+          <span class="nav-icon">🛡️</span>
+          <span>Connekt Shield</span>
+        </a>
+
+        <div class="nav-label">Identity</div>
+        <a href="#profile" class="nav-item" data-module="profile">
+          <span class="nav-icon">👤</span>
+          <span>My Profile</span>
+        </a>
+        <a href="#settings" class="nav-item" data-module="settings">
+          <span class="nav-icon">⚙️</span>
+          <span>Security & Privacy</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <img id="sidebarAvatar" src="/assets/images/default-avatar.png" alt="Avatar" class="sidebar-user-avatar" />
+        <div class="sidebar-user-info">
+          <div id="sidebarName" class="sidebar-user-name">Guest User</div>
+          <div id="sidebarHandle" class="sidebar-user-handle">@connekt</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Wrapper -->
+    <div class="main-wrapper">
+      
+      <!-- Top Navigation Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="mobileMenuToggle" class="mobile-menu-btn">☰</button>
+          
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" placeholder="Search people, communities, posts, or emails..." />
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <!-- Experience Mode Switcher -->
+          <div class="mode-switcher-container">
+            <button class="mode-pill-btn active" data-mode="common">
+              <span>Personal</span>
+            </button>
+            <button class="mode-pill-btn" data-mode="professional">
+              <span>Professional</span>
+            </button>
+            <button class="mode-pill-btn" data-mode="both">
+              <span>Both Mode</span>
+            </button>
+          </div>
+
+          <!-- Active Mode Badge Indicator -->
+          <span id="activeModeBadge" class="badge badge-mode badge-success">COMMON MODE</span>
+
+          <!-- Notifications -->
+          <button class="icon-btn" title="Notifications">
+            <span>🔔</span>
+            <span class="notification-dot"></span>
+          </button>
+
+          <!-- Topbar Profile Pill & Logout -->
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <img id="topbarAvatar" src="/assets/images/default-avatar.png" class="sidebar-user-avatar" style="width: 36px; height: 36px; cursor: pointer;" onclick="window.app.navigateTo('profile')" />
+            <button id="btnLogout" class="btn btn-secondary btn-sm" title="Sign Out">Sign Out</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dynamic Content Body -->
+      <main id="mainContentArea" class="content-area">
+        <!-- Rendered dynamically by app.js -->
+      </main>
+
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- AUTHENTICATION MODAL (Unified Account System)                        -->
+  <!-- ==================================================================== -->
+  <div id="authModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="brand-logo" style="width: 32px; height: 32px; font-size: 1rem;">C</div>
+          <h3 class="modal-title">CONNEKT Identity</h3>
+        </div>
+      </div>
+
+      <!-- Tab selection: Login, Register, Forgot -->
+      <div class="tabs-container" style="padding: 0 24px; margin-bottom: 0;">
+        <button class="tab-btn active" data-auth-tab="login">Sign In</button>
+        <button class="tab-btn" data-auth-tab="register">Create Account</button>
+        <button class="tab-btn" data-auth-tab="forgot">Recover</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- ================= PANEL 1: SIGN IN ================= -->
+        <div id="panel-login" class="auth-panel">
+          <form id="loginForm">
+            <div style="display: flex; gap: 16px; margin-bottom: 16px; font-size: 0.85rem;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="loginMode" value="password" checked />
+                <span>Password Login</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="loginMode" value="otp" />
+                <span>One-Time Code (OTP)</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Phone Number, Username, or Connekt Mail</label>
+              <input type="text" id="loginIdentifier" class="form-control" placeholder="+1234567890 or @username or name@connekt.me" required />
+            </div>
+
+            <div class="form-group" id="loginPasswordGroup">
+              <label class="form-label">Password</label>
+              <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" />
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">Sign In to CONNEKT</button>
+          </form>
+        </div>
+
+        <!-- ================= PANEL 2: CREATE ACCOUNT ================= -->
+        <div id="panel-register" class="auth-panel" style="display: none;">
+          <form id="registerForm">
+            <!-- Step 1: Phone & OTP Verification -->
+            <div class="form-group">
+              <label class="form-label">Phone Number (Required for Verified Identity)</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="tel" id="regPhone" class="form-control" placeholder="+1234567890" required />
+                <button type="button" id="btnSendRegOtp" class="btn btn-secondary" style="white-space: nowrap;">Send OTP</button>
+              </div>
+              <div id="phoneStatus" class="input-feedback"></div>
+            </div>
+
+            <!-- OTP Input Challenge Section -->
+            <div id="regOtpContainer" style="display: none; background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.85rem; font-weight: 600;">Enter 6-Digit Verification Code</span>
+                <span id="otpTimerDisplay" style="font-size: 0.8rem; color: var(--accent-cyan);">05:00</span>
+              </div>
+              
+              <div class="otp-input-group">
+                <input type="text" maxlength="1" class="otp-digit" />
+                <input type="text" maxlength="1" class="otp-digit" />
+                <input type="text" maxlength="1" class="otp-digit" />
+                <input type="text" maxlength="1" class="otp-digit" />
+                <input type="text" maxlength="1" class="otp-digit" />
+                <input type="text" maxlength="1" class="otp-digit" />
+              </div>
+              <div style="text-align: right;">
+                <button type="button" id="btnResendOtp" class="btn btn-secondary btn-sm" disabled>Resend Code</button>
+              </div>
+            </div>
+
+            <!-- Step 2: User Credentials & Connekt Mail -->
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" id="regFullName" class="form-control" placeholder="e.g. Koushiki Roy" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Unique Connekt Username</label>
+                <input type="text" id="regUsername" class="form-control" placeholder="e.g. koushiki" required />
+                <div id="usernameStatus" class="input-feedback"></div>
+              </div>
+            </div>
+
+            <!-- Connekt Mail Preview Banner -->
+            <div style="background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 16px;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">YOUR UNIQUE CONNEKT MAIL ADDRESS</span>
+              <span id="connektMailPreview" style="font-weight: 700; color: var(--accent-cyan); font-size: 0.95rem;">yourname@connekt.me</span>
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Create Password</label>
+                <input type="password" id="regPassword" class="form-control" placeholder="At least 6 characters" minlength="6" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Recovery Email (Optional)</label>
+                <input type="email" id="regRecoveryEmail" class="form-control" placeholder="backup@example.com" />
+              </div>
+            </div>
+
+            <!-- Step 3: Experience Mode Selection -->
+            <div class="form-group">
+              <label class="form-label">Initial Account Experience Mode</label>
+              <input type="hidden" id="regSelectedMode" value="common" />
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-secondary btn-sm reg-mode-btn active" data-mode="common" style="flex: 1;">Common (Social)</button>
+                <button type="button" class="btn btn-secondary btn-sm reg-mode-btn" data-mode="professional" style="flex: 1;">Professional</button>
+                <button type="button" class="btn btn-secondary btn-sm reg-mode-btn" data-mode="both" style="flex: 1;">Both Modes</button>
+              </div>
+              <div class="form-hint">You can switch seamlessly between modes anytime after signing in.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">Create My CONNEKT Account</button>
+          </form>
+        </div>
+
+        <!-- ================= PANEL 3: RECOVER PASSWORD ================= -->
+        <div id="panel-forgot" class="auth-panel" style="display: none;">
+          <form id="forgotPasswordForm">
+            <div class="form-group">
+              <label class="form-label">Registered Phone Number or Username</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="forgotIdentifier" class="form-control" placeholder="+1234567890 or @username" required />
+                <button type="button" id="btnSendForgotOtp" class="btn btn-secondary" style="white-space: nowrap;">Send OTP</button>
+              </div>
+            </div>
+
+            <div id="forgotOtpStep" style="display: none;">
+              <div class="form-group">
+                <label class="form-label">Enter 6-Digit Reset Code</label>
+                <input type="text" id="forgotOtpCode" class="form-control" placeholder="123456" maxlength="6" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">New Secure Password</label>
+                <input type="password" id="forgotNewPassword" class="form-control" placeholder="New password (min 6 chars)" minlength="6" />
+              </div>
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Reset Password & Sign In</button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Toast Notifications Container -->
+  <div id="toast-container"></div>
+
+  <!-- Global Loader -->
+  <div id="globalLoader" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 3000; align-items: center; justify-content: center;">
+    <div style="width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+  </div>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <!-- Real-Time WebSocket Client Library -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- Application Modules -->
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/chat.js"></script>
+  <script src="/js/community.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
