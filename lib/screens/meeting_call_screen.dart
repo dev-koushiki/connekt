@@ -82,7 +82,7 @@ class _MeetingCallScreenState extends State<MeetingCallScreen> {
                     padding: const EdgeInsets.all(4),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(60),
-                      child: widget.avatarUrl.isNotEmpty
+                      child: widget.avatarUrl.isNotEmpty && (widget.avatarUrl.startsWith('http://') || widget.avatarUrl.startsWith('https://'))
                           ? Image.network(
                               widget.avatarUrl,
                               fit: BoxFit.cover,

@@ -438,7 +438,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       padding: const EdgeInsets.all(3),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(45),
-                        child: personal?.avatarUrl.isNotEmpty == true
+                        child: personal?.avatarUrl.isNotEmpty == true && (personal!.avatarUrl.startsWith('http://') || personal!.avatarUrl.startsWith('https://'))
                             ? Image.network(
                                 personal!.avatarUrl,
                                 fit: BoxFit.cover,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../models/user_model.dart';
+import '../widgets/safe_avatar.dart';
 import 'chat_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
@@ -275,23 +276,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   // Avatar with online/group indicator
                                   Stack(
                                     children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(22),
-                                        child: Image.network(
-                                          conv['avatar'],
-                                          width: 44,
-                                          height: 44,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Container(
-                                            width: 44,
-                                            height: 44,
-                                            color: inputColor,
-                                            child: Icon(
-                                              isGroup ? Icons.group : Icons.person,
-                                              color: isDark ? Colors.white60 : Colors.black45,
-                                            ),
-                                          ),
-                                        ),
+                                      SafeAvatar(
+                                        url: conv['avatar'] is String ? conv['avatar'] : null,
+                                        fallbackText: (conv['name'] ?? '').toString(),
+                                        size: 44,
+                                        radius: 22,
+                                        fallbackIcon: isGroup ? Icons.group : null,
                                       ),
                                       if (isOnline && !isGroup)
                                         Positioned(

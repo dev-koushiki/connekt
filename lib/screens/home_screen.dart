@@ -315,7 +315,7 @@ class HomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(2),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(19),
-                        child: avatarUrl != null && avatarUrl.isNotEmpty
+                        child: avatarUrl != null && avatarUrl.isNotEmpty && (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://'))
                             ? Image.network(
                                 avatarUrl,
                                 fit: BoxFit.cover,
