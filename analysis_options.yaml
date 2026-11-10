@@ -1,0 +1,18 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+  errors:
+    deprecated_member_use: ignore
+    unnecessary_underscores: ignore
+
+linter:
+  rules:
+    avoid_print: false

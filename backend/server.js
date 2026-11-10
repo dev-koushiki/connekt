@@ -11,9 +11,11 @@ const setupSockets = require('./sockets/socketHandler');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
+const meetingRoutes = require('./routes/meetingRoutes');
 const { apiLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
+app.set('trust proxy', 1); // Trust first hop for reverse proxy / cloud tunnel rate limiting
 const server = http.createServer(app);
 
 // Socket.io initialization
@@ -71,6 +73,7 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/meetings', meetingRoutes);
 
 // Fallback routing for SPA / Pages
 app.use((req, res) => {
@@ -92,11 +95,52 @@ app.use((err, req, res, next) => {
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ [PORT CONFLICT] Port ${PORT} is already in use by another running process.`);
+    console.error(`💡 Run: npx kill-port ${PORT} or close the other terminal running node.\n`);
+    process.exit(1);
+  } else {
+    console.error('[Server Error]:', err);
+  }
+});
+
+const os = require('os');
+
+const getLocalIpAddresses = () => {
+  const interfaces = os.networkInterfaces();
+  const addresses = [];
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        const isVirtual = /virtual|vethernet|loopback|bluetooth|virtualbox|vbox|host-only/i.test(name) ||
+                          iface.address.startsWith('192.168.56.') ||
+                          iface.address.startsWith('169.254.');
+        addresses.push({
+          name,
+          address: iface.address,
+          isPreferred: (/wi-fi|wlan|wireless/i.test(name) || /ethernet/i.test(name)) && !isVirtual
+        });
+      }
+    }
+  }
+  addresses.sort((a, b) => (b.isPreferred ? 1 : 0) - (a.isPreferred ? 1 : 0));
+  return addresses;
+};
+
 server.listen(PORT, async () => {
+  const ips = getLocalIpAddresses();
+  const primaryIp = ips[0]?.address || 'localhost';
+
   console.log(`====================================================`);
   console.log(`🚀 CONNEKT Unified Ecosystem Server Running!`);
-  console.log(`🌐 Address: http://localhost:${PORT}`);
-  console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Localhost:     http://localhost:${PORT}`);
+  console.log(`📱 Phone (Wi-Fi): http://${primaryIp}:${PORT}`);
+  if (ips.length > 1) {
+    console.log(`   Other IPs:    ${ips.slice(1).map(i => `${i.name}: ${i.address}`).join(', ')}`);
+  }
+  console.log(`🔌 USB Cable:     adb reverse tcp:${PORT} tcp:${PORT} (use localhost:${PORT})`);
+  console.log(`🌍 Any Network:   npm run tunnel (works on 4G/5G mobile data anywhere)`);
   console.log(`====================================================`);
 
   try {
@@ -104,5 +148,26 @@ server.listen(PORT, async () => {
     console.log(`✅ Connected to PostgreSQL: ${res.rows[0].version.split(',')[0]}`);
   } catch (dbErr) {
     console.error(`❌ Database Connection Failed:`, dbErr.message);
+  }
+
+  if (process.env.AUTO_START_TUNNEL === 'true') {
+    try {
+      const localtunnel = require('localtunnel');
+      const tunnel = await localtunnel({ port: PORT, subdomain: process.env.TUNNEL_SUBDOMAIN || undefined });
+      const fs = require('fs');
+      fs.writeFileSync(path.join(__dirname, 'active_tunnel.json'), JSON.stringify({
+        url: tunnel.url,
+        apiUrl: `${tunnel.url}/api`,
+        updatedAt: new Date().toISOString()
+      }, null, 2));
+      console.log(`\n====================================================`);
+      console.log(`🌍 AUTO CLOUD TUNNEL RUNNING (FOR 5G MOBILE DATA):`);
+      console.log(`   👉 URL: ${tunnel.url}`);
+      console.log(`   👉 Use on 5G phone: Tap ⚙️ Settings in app and enter:`);
+      console.log(`      ${tunnel.url.replace(/^https?:\/\//, '')}`);
+      console.log(`====================================================\n`);
+    } catch (tErr) {
+      console.warn(`[Tunnel Warning] Could not start auto cloud tunnel: ${tErr.message}`);
+    }
   }
 });

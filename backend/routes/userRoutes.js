@@ -30,4 +30,7 @@ router.delete('/experience/:expId', requireAuth, UserController.deleteExperience
 router.get('/privacy', requireAuth, UserController.getPrivacy);
 router.put('/privacy', requireAuth, UserController.updatePrivacy);
 
+// Contacts Search
+router.get('/contacts', requireAuth, UserController.getContacts);
+
 module.exports = router;

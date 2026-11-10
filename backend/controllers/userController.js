@@ -277,6 +277,35 @@ class UserController {
       return errorResponse(res, 500, 'Failed to update privacy settings.');
     }
   }
+
+  /**
+   * Search registered CONNEKT users for contacts / calling
+   */
+  static async getContacts(req, res) {
+    try {
+      const db = require('../config/database');
+      const q = req.query.q ? `%${req.query.q.trim().toLowerCase()}%` : '%';
+      const result = await db.query(
+        `SELECT u.id, u.username, u.email, u.phone, 
+                COALESCE(p.full_name, u.username) AS full_name,
+                COALESCE(p.display_name, p.full_name, u.username) AS display_name,
+                COALESCE(p.avatar_url, '') AS avatar_url
+         FROM users u
+         LEFT JOIN user_profiles p ON u.id = p.user_id
+         WHERE u.id != $1 AND (
+           LOWER(u.username) LIKE $2 OR 
+           LOWER(u.email) LIKE $2 OR 
+           LOWER(COALESCE(p.full_name, '')) LIKE $2
+         )
+         ORDER BY full_name ASC LIMIT 50`,
+        [req.user.id, q]
+      );
+      return successResponse(res, 200, 'Contacts retrieved', { contacts: result.rows });
+    } catch (err) {
+      console.error('[Get Contacts Error]:', err);
+      return errorResponse(res, 500, 'Failed to fetch contacts');
+    }
+  }
 }
 
 module.exports = UserController;

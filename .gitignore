@@ -1,9 +1,18 @@
-# Dependencies
+# Flutter generated files
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Node.js dependencies
 node_modules/
 backend/node_modules/
 
 # Environment Variables & Secrets
 .env
+.env.*
+!.env.example
 backend/.env
 *.env.local
 
@@ -16,10 +25,15 @@ yarn-error.log*
 # Uploaded User Content
 backend/uploads/avatars/*
 !backend/uploads/avatars/.gitkeep
+backend/active_tunnel.json
 
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# IDE
+.idea/
+.vscode/
 
 # Backups
 _flutter_backup/

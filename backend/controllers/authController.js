@@ -88,12 +88,19 @@ class AuthController {
       }
 
       const otpResult = await createOtp(cleanId, purpose, req.ip);
+      const isEmail = cleanId.includes('@');
+      const msg = isEmail 
+        ? `Verification code sent to ${cleanId}`
+        : (otpResult.smsDispatched 
+            ? `Verification code sent via SMS to ${cleanId}`
+            : `SMS Gateway unreachable. Test OTP Code: [${otpResult.previewCode}]. Open SMS Gateway app on phone to send real SMS.`);
 
-      return successResponse(res, 200, `Verification code sent to ${cleanId}`, {
+      return successResponse(res, 200, msg, {
         identifier: cleanId,
         purpose,
         expiresAt: otpResult.expiresAt,
-        previewCode: otpResult.previewCode // Provided in dev environment for easy testing
+        smsDispatched: otpResult.smsDispatched,
+        previewCode: otpResult.previewCode
       });
     } catch (err) {
       console.error('[Send OTP Error]:', err);

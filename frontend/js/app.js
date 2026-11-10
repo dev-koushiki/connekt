@@ -11,8 +11,35 @@ class AppController {
   }
 
   async init() {
+    this.initTheme();
     this.setupGlobalListeners();
     window.authManager.init();
+
+    // Support URL Hash Navigation (e.g. #meetings, #home, #profile)
+    const initialHash = window.location.hash.replace('#', '');
+    if (initialHash && ['home', 'meetings', 'profile', 'settings', 'messages', 'communities', 'mail'].includes(initialHash)) {
+      this.activeModule = initialHash;
+    } else if (initialHash.startsWith('meet/')) {
+      this.activeModule = 'meetings';
+      const codeFromHash = initialHash.replace('meet/', '').trim();
+      setTimeout(() => this.handleDirectJoinRoom(codeFromHash), 600);
+    }
+
+    // Direct pathname navigation (e.g. /meet/abc-defg-hij)
+    if (window.location.pathname.startsWith('/meet/')) {
+      const codeFromPath = window.location.pathname.replace('/meet/', '').split('/')[0].trim();
+      if (codeFromPath) {
+        this.activeModule = 'meetings';
+        setTimeout(() => this.handleDirectJoinRoom(codeFromPath), 600);
+      }
+    }
+
+    window.addEventListener('hashchange', () => {
+      const h = window.location.hash.replace('#', '');
+      if (h && h !== this.activeModule) {
+        this.navigateTo(h, false);
+      }
+    });
 
     // Check if user is logged in
     const token = window.api.getToken();
@@ -88,6 +115,33 @@ class AppController {
     if (avatarInput) {
       avatarInput.addEventListener('change', (e) => this.handleAvatarUpload(e));
     }
+  }
+
+  initTheme() {
+    const savedTheme = localStorage.getItem('connekt-theme') || 'dark';
+    this.setTheme(savedTheme, false);
+  }
+
+  setTheme(theme, notify = true) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('connekt-theme', theme);
+    const icon = document.getElementById('themeToggleIcon');
+    if (icon) {
+      icon.textContent = theme === 'light' ? '☀️' : '🌙';
+    }
+    const btn = document.getElementById('btnThemeToggle');
+    if (btn) {
+      btn.title = theme === 'light' ? 'Switch to Dark Mood' : 'Switch to Light Mood';
+    }
+    if (notify) {
+      this.showToast(`Switched to ${theme === 'light' ? 'Light Mood ☀️' : 'Dark Mood 🌙'}`, 'info');
+    }
+  }
+
+  toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    this.setTheme(next, true);
   }
 
   showToast(message, type = 'info') {
@@ -201,8 +255,11 @@ class AppController {
     }
   }
 
-  navigateTo(moduleName) {
+  navigateTo(moduleName, updateHash = true) {
     this.activeModule = moduleName;
+    if (updateHash && window.location.hash !== `#${moduleName}`) {
+      window.location.hash = moduleName;
+    }
 
     document.querySelectorAll('.nav-item[data-module]').forEach(item => {
       item.classList.toggle('active', item.dataset.module === moduleName);
@@ -219,6 +276,9 @@ class AppController {
       case 'home':
         this.renderHomeView(mainContent);
         break;
+      case 'meetings':
+        this.renderMeetingsDashboard(mainContent);
+        break;
       case 'profile':
         this.renderProfileView(mainContent);
         break;
@@ -227,7 +287,6 @@ class AppController {
         break;
       case 'messages':
       case 'communities':
-      case 'meetings':
       case 'mail':
       case 'reminders':
       case 'network':
@@ -258,8 +317,8 @@ class AppController {
           <h1>Hello, ${user.personalProfile?.display_name || user.username}! 👋</h1>
           <p>${subtext}</p>
           <div style="display: flex; gap: 12px; margin-top: 16px;">
-            <button class="btn btn-primary" onclick="window.app.navigateTo('profile')">Edit Profile & Credentials</button>
-            <button class="btn btn-secondary" onclick="window.app.navigateTo('settings')">Security & Device Sessions</button>
+            <button class="btn btn-primary" onclick="window.app.navigateTo('meetings')">Open Meetings Module 📹</button>
+            <button class="btn btn-secondary" onclick="window.app.navigateTo('profile')">Edit Profile & Credentials</button>
           </div>
         </div>
         <div style="text-align: right; min-width: 200px;">
@@ -267,6 +326,76 @@ class AppController {
           <div style="font-weight: 700; color: var(--accent-cyan); font-size: 1.05rem;">${user.email}</div>
           <div style="margin-top: 10px;">
             <span class="badge badge-success">● Status: Active & Secured</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 Primary Application Shortcut Cards (Meetings, Chats, Mails) -->
+      <div style="margin-bottom: 28px;">
+        <div style="font-size: 0.82rem; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 14px; text-transform: uppercase;">
+          Primary Ecosystem Applications
+        </div>
+        <div class="grid-3" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+          <!-- Card 1: Meetings -->
+          <div class="card card-glow" style="cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border-left: 3px solid #2563eb; transition: all 0.2s ease;" onclick="window.app.navigateTo('meetings')">
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(37, 99, 235, 0.15); color: #3b82f6; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                  📹
+                </div>
+                <span class="badge badge-primary">Phase 1 Active</span>
+              </div>
+              <h3 style="font-size: 1.15rem; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                <span>Meetings</span>
+              </h3>
+              <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4;">
+                Connect through video and audio meetings. Instant rooms, scheduled conferences & attendance.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 0.85rem; color: #60a5fa; font-weight: 600;">
+              <span>Open Meetings Module</span>
+              <span>→</span>
+            </div>
+          </div>
+
+          <!-- Card 2: Chats -->
+          <div class="card card-glow" style="cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border-left: 3px solid #06b6d4; transition: all 0.2s ease;" onclick="window.app.navigateTo('messages')">
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(6, 182, 212, 0.15); color: #06b6d4; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                  💬
+                </div>
+                <span class="badge badge-success">Direct & Group</span>
+              </div>
+              <h3 style="font-size: 1.15rem; margin-bottom: 6px;">Chats</h3>
+              <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4;">
+                Connect through individual and group conversations with real-time delivery and voice notes.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 0.85rem; color: var(--accent-cyan); font-weight: 600;">
+              <span>Open Chat Messenger</span>
+              <span>→</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Mails -->
+          <div class="card card-glow" style="cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border-left: 3px solid #8b5cf6; transition: all 0.2s ease;" onclick="window.app.navigateTo('mail')">
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                  ✉️
+                </div>
+                <span class="badge badge-mode" style="background: rgba(139, 92, 246, 0.2); color: #c4b5fd;">@${user.username}</span>
+              </div>
+              <h3 style="font-size: 1.15rem; margin-bottom: 6px;">Mails</h3>
+              <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4;">
+                Send, receive and manage your emails with your unique CONNEKT identity.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 0.85rem; color: #c084fc; font-weight: 600;">
+              <span>Open Connekt Mail</span>
+              <span>→</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1009,6 +1138,1122 @@ class AppController {
       this.showLoading(false);
       this.showToast('Logged out safely.', 'info');
       this.showAuthModal(true);
+    }
+  }
+
+  // ====================================================================
+  // MEETINGS & COLLABORATION MODULE (PHASE 1 FOUNDATION)
+  // ====================================================================
+
+  async renderMeetingsDashboard(container) {
+    this.meetingsFilter = 'all';
+    this.meetingsSearch = '';
+
+    container.innerHTML = `
+      <!-- Meetings Top Header -->
+      <div class="meetings-header">
+        <div>
+          <button class="btn btn-secondary btn-sm" style="margin-bottom: 8px; display: inline-flex; align-items: center; gap: 6px;" onclick="window.app.navigateTo('home')">
+            ← Back to Dashboard
+          </button>
+          <h2>CONNEKT Meetings & Collaboration</h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem;">
+            Instant rooms, scheduled video conferences, and attendance tracking.
+          </p>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="meetings-search-bar">
+            <span>🔍</span>
+            <input type="text" id="meetingsSearchInput" class="meetings-search-input" placeholder="Search meetings by title, room code, or agenda..." />
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="window.app.openScheduleMeetingModal()">+ Schedule Meeting</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.app.loadMeetingsList()">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Main Action Section (3 Primary Cards) -->
+      <div class="meeting-actions-grid">
+        <!-- Card 1: Start Instant Meeting -->
+        <div class="meeting-action-card primary">
+          <div>
+            <div class="meeting-action-card-icon">⚡</div>
+            <h3 style="margin-bottom: 8px;">Start Instant Meeting</h3>
+            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 20px;">
+              Create an instant meeting room immediately. Generates a unique room code (<code style="color: var(--accent-cyan);">abc-defg-hij</code>) and assigns you as host.
+            </p>
+          </div>
+          <button class="btn btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="window.app.handleCreateInstantMeeting()">
+            <span>Start Meeting Now</span>
+            <span>📹</span>
+          </button>
+        </div>
+
+        <!-- Card 2: Join a Meeting -->
+        <div class="meeting-action-card accent">
+          <div>
+            <div class="meeting-action-card-icon">🔗</div>
+            <h3 style="margin-bottom: 8px;">Join a Meeting</h3>
+            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 14px;">
+              Enter a meeting room code or link to enter an active session.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+              <input type="text" id="joinRoomCodeInput" class="form-control" placeholder="Room code (e.g. abc-defg-hij)" style="font-family: monospace; font-size: 0.95rem; text-transform: lowercase;" />
+              <input type="password" id="joinRoomPasscodeInput" class="form-control" placeholder="Passcode (optional if requested)" style="font-size: 0.88rem;" />
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="width: 100%; border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="window.app.handleJoinMeetingFromInput()">
+            Join Meeting Room →
+          </button>
+        </div>
+
+        <!-- Card 3: Schedule a Meeting -->
+        <div class="meeting-action-card purple">
+          <div>
+            <div class="meeting-action-card-icon">📅</div>
+            <h3 style="margin-bottom: 8px;">Schedule a Meeting</h3>
+            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 20px;">
+              Plan a future video conference with custom date, time, duration, agenda, and invite registered CONNEKT contacts.
+            </p>
+          </div>
+          <button class="btn btn-secondary" style="width: 100%;" onclick="window.app.openScheduleMeetingModal()">
+            Schedule New Meeting 📅
+          </button>
+        </div>
+      </div>
+
+      <!-- Meeting Overview Section -->
+      <div style="margin-top: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+          <h3 style="display: flex; align-items: center; gap: 10px;">
+            <span>Meeting Overview</span>
+            <span id="meetingsTotalCountBadge" class="badge badge-primary">0 Total</span>
+          </h3>
+
+          <!-- Filter Tabs -->
+          <div class="tabs-container" style="margin-bottom: 0;">
+            <button class="tab-btn active" data-meetings-tab="all" onclick="window.app.switchMeetingsFilter('all')">All Meetings</button>
+            <button class="tab-btn" data-meetings-tab="upcoming" onclick="window.app.switchMeetingsFilter('upcoming')">Upcoming</button>
+            <button class="tab-btn" data-meetings-tab="today" onclick="window.app.switchMeetingsFilter('today')">Today</button>
+            <button class="tab-btn" data-meetings-tab="created_by_me" onclick="window.app.switchMeetingsFilter('created_by_me')">Created by Me</button>
+            <button class="tab-btn" data-meetings-tab="invited_to" onclick="window.app.switchMeetingsFilter('invited_to')">Invited to</button>
+            <button class="tab-btn" data-meetings-tab="past" onclick="window.app.switchMeetingsFilter('past')">Past History</button>
+          </div>
+        </div>
+
+        <!-- Dynamic Meeting Records Container -->
+        <div id="meetingsListContainer">
+          <div style="text-align: center; padding: 36px; color: var(--text-muted);">
+            <div style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;"></div>
+            Loading meetings from database...
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Container for Schedule & Instant Meeting Result -->
+      <div id="meetingsModalContainer"></div>
+    `;
+
+    // Hook search input with debounce
+    let searchTimeout = null;
+    const searchInput = document.getElementById('meetingsSearchInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          this.meetingsSearch = e.target.value.trim();
+          this.loadMeetingsList();
+        }, 300);
+      });
+    }
+
+    // Load initial meetings list
+    await this.loadMeetingsList();
+  }
+
+  async switchMeetingsFilter(filter) {
+    this.meetingsFilter = filter;
+    document.querySelectorAll('[data-meetings-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.meetingsTab === filter);
+    });
+    await this.loadMeetingsList();
+  }
+
+  async loadMeetingsList() {
+    const container = document.getElementById('meetingsListContainer');
+    if (!container) return;
+
+    try {
+      const res = await window.api.meetings.listMeetings({
+        filter: this.meetingsFilter,
+        search: this.meetingsSearch
+      });
+
+      const meetings = res.data.meetings || [];
+      const countBadge = document.getElementById('meetingsTotalCountBadge');
+      if (countBadge) countBadge.textContent = `${meetings.length} Meeting${meetings.length === 1 ? '' : 's'}`;
+
+      if (meetings.length === 0) {
+        container.innerHTML = `
+          <div class="card meeting-empty-state">
+            <div style="font-size: 2.5rem; margin-bottom: 12px;">📹</div>
+            <h4 style="margin-bottom: 6px; color: var(--text-primary);">No meetings found</h4>
+            <p style="color: var(--text-muted); font-size: 0.9rem; max-width: 420px; margin: 0 auto 16px;">
+              ${this.meetingsSearch ? `No meetings match "${this.meetingsSearch}". Try another keyword.` : `There are no meetings in this category yet. Start an instant meeting or schedule a conference above.`}
+            </p>
+            <button class="btn btn-primary btn-sm" onclick="window.app.handleCreateInstantMeeting()">Start Instant Meeting</button>
+          </div>
+        `;
+        return;
+      }
+
+      const currentUserId = this.currentUser?.id;
+
+      container.innerHTML = meetings.map(m => {
+        const isHost = m.host_id === currentUserId;
+        const isLive = m.status === 'live';
+        const isEnded = m.status === 'ended';
+        const isCancelled = m.status === 'cancelled';
+        const isScheduled = m.status === 'scheduled';
+
+        let statusHtml = '';
+        if (isLive) {
+          statusHtml = `<span class="status-beacon live"><span class="beacon-dot"></span>HAPPENING NOW</span>`;
+        } else if (isScheduled) {
+          statusHtml = `<span class="badge badge-primary">UPCOMING</span>`;
+        } else if (isEnded) {
+          statusHtml = `<span class="badge" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">ENDED</span>`;
+        } else if (isCancelled) {
+          statusHtml = `<span class="badge badge-danger">CANCELLED</span>`;
+        }
+
+        const scheduledDate = m.scheduled_at ? new Date(m.scheduled_at) : null;
+        const formattedDate = scheduledDate ? scheduledDate.toLocaleString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        }) : 'Instant / Live';
+
+        return `
+          <div class="meeting-card">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap;">
+                  ${statusHtml}
+                  <span class="meeting-code-chip" title="Click to copy room code" onclick="window.app.handleCopyText('${m.room_code}', 'Room code copied!')">
+                    <span>CNK-${m.room_code}</span>
+                    <span style="opacity: 0.7;">📋</span>
+                  </span>
+                  ${m.is_locked ? '<span class="badge badge-warning">🔒 Locked Room</span>' : ''}
+                  ${m.passcode ? '<span class="badge badge-mode">🔑 Passcode Protected</span>' : ''}
+                </div>
+                <h3 style="font-size: 1.15rem; margin-bottom: 4px; color: var(--text-primary);">${m.title}</h3>
+                ${m.description ? `<p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 6px;">${m.description}</p>` : ''}
+                ${m.agenda ? `<div style="font-size: 0.82rem; color: var(--accent-cyan); margin-bottom: 6px;">📌 Agenda: ${m.agenda}</div>` : ''}
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                ${(!isEnded && !isCancelled) ? `
+                  <button class="btn btn-primary btn-sm" style="display: flex; align-items: center; gap: 6px;" onclick="window.app.handleDirectJoinRoom('${m.room_code}')">
+                    <span>📹</span>
+                    <span>Join Call</span>
+                  </button>
+                ` : ''}
+                <button class="btn btn-secondary btn-sm" onclick="window.app.handleCopyMeetingLink('${m.room_code}', '${m.title}')">
+                  Copy Invite
+                </button>
+                <button class="btn btn-secondary btn-sm" style="color: var(--accent-cyan); border-color: rgba(6, 182, 212, 0.4);" onclick="window.app.openMeetingRecordsModal('${m.id}')" title="View Attendance, Minutes & Action Items">
+                  📋 Records
+                </button>
+                ${isHost && !isEnded && !isCancelled ? `
+                  <button class="btn btn-secondary btn-sm" style="color: ${m.is_locked ? 'var(--color-success)' : 'var(--color-warning)'};" onclick="window.app.handleToggleMeetingLock('${m.id}', ${!!m.is_locked})">
+                    ${m.is_locked ? '🔓 Unlock' : '🔒 Lock'}
+                  </button>
+                  <button class="btn btn-secondary btn-sm" style="color: var(--color-danger);" onclick="window.app.handleCancelMeeting('${m.id}')">
+                    Cancel
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border-subtle); font-size: 0.82rem; color: var(--text-muted);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${m.host_avatar || '/assets/images/default-avatar.png'}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover;" />
+                <span>Host: <strong style="color: var(--text-primary);">${m.host_name || m.host_username}</strong></span>
+                ${isHost ? '<span class="badge badge-success" style="font-size: 0.7rem; padding: 1px 6px;">You</span>' : ''}
+              </div>
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <span>🕒 ${formattedDate}</span>
+                <span>⏱️ ${m.duration_minutes || 60} mins</span>
+                <span>👥 ${m.participant_count || 1} Participant${m.participant_count == 1 ? '' : 's'}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load meetings list:', err);
+      container.innerHTML = `
+        <div class="card" style="text-align: center; color: var(--color-danger); padding: 24px;">
+          Failed to load meetings: ${err.message}
+        </div>
+      `;
+    }
+  }
+
+  async handleCreateInstantMeeting() {
+    try {
+      this.showLoading(true);
+      const res = await window.api.meetings.createInstantRoom('Instant Meeting');
+      const meeting = res.data.meeting;
+      const roomCode = res.data.roomCode;
+      const directUrl = `${window.location.origin}/meet/${roomCode}`;
+
+      this.showToast('Instant meeting room created!', 'success');
+      this.showInstantMeetingModal(roomCode, directUrl, meeting);
+      await this.loadMeetingsList();
+    } catch (err) {
+      this.showToast(err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  showInstantMeetingModal(roomCode, directUrl, meeting) {
+    const modalContainer = document.getElementById('meetingsModalContainer') || document.body;
+    const modalId = 'instantMeetingModal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    const div = document.createElement('div');
+    div.id = modalId;
+    div.className = 'modal-overlay active';
+    div.innerHTML = `
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(37, 99, 235, 0.2); color: #3b82f6; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">⚡</div>
+            <h3 class="modal-title">Instant Meeting Created</h3>
+          </div>
+          <button class="modal-close-btn" onclick="document.getElementById('${modalId}').remove()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+            Your instant room is ready. Share this readable meeting code or invite link with participants.
+          </p>
+
+          <div style="background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; text-align: center; margin-bottom: 16px;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 6px;">Room Code</div>
+            <div style="font-family: monospace; font-size: 1.8rem; font-weight: 800; color: var(--accent-cyan); letter-spacing: 0.1em; user-select: all;">
+              ${roomCode}
+            </div>
+            <button class="btn btn-secondary btn-sm" style="margin-top: 10px;" onclick="window.app.handleCopyText('${roomCode}', 'Room code copied!')">
+              📋 Copy Room Code
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Direct Meeting Link</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" readonly value="${directUrl}" class="form-control" style="font-size: 0.85rem;" />
+              <button class="btn btn-secondary" onclick="window.app.handleCopyMeetingLink('${roomCode}', 'Instant Meeting')">Copy</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between;">
+          <button class="btn btn-secondary" onclick="document.getElementById('${modalId}').remove()">Close</button>
+          <button class="btn btn-primary" onclick="window.app.handleDirectJoinRoom('${roomCode}'); document.getElementById('${modalId}').remove();">
+            Enter Meeting Room Now 📹
+          </button>
+        </div>
+      </div>
+    `;
+    modalContainer.appendChild(div);
+  }
+
+  async handleJoinMeetingFromInput() {
+    const input = document.getElementById('joinRoomCodeInput');
+    const passInput = document.getElementById('joinRoomPasscodeInput');
+    if (!input) return;
+
+    let code = input.value.trim();
+    if (!code) {
+      this.showToast('Please enter a meeting room code or link.', 'warning');
+      input.focus();
+      return;
+    }
+
+    // Extract code if user pasted a full link (e.g. http://localhost:5000/meet/abc-defg-hij)
+    if (code.includes('/meet/')) {
+      code = code.split('/meet/').pop().split('?')[0].split('#')[0];
+    } else if (code.includes('CNK-')) {
+      code = code.replace('CNK-', '');
+    }
+
+    const passcode = passInput ? passInput.value.trim() : '';
+    await this.handleDirectJoinRoom(code, passcode);
+  }
+
+  async handleDirectJoinRoom(roomCode, passcode = '') {
+    try {
+      this.showLoading(true);
+      const res = await window.api.meetings.joinRoom(roomCode, passcode);
+      const meeting = res.data.meeting;
+      const role = res.data.role;
+
+      this.showToast(`Joined meeting room "${meeting.title}" as ${role}!`, 'success');
+
+      // Launch full WebRTC live calling interface
+      if (window.meetingRoom) {
+        await window.meetingRoom.enterRoom(meeting, role, this.currentUser);
+      } else {
+        this.showJoinedMeetingSummaryModal(meeting, role, res.data.participants);
+      }
+
+      await this.loadMeetingsList();
+    } catch (err) {
+      console.error('Failed to join room:', err);
+      this.showToast(err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  showJoinedMeetingSummaryModal(meeting, role, participants) {
+    const modalContainer = document.getElementById('meetingsModalContainer') || document.body;
+    const modalId = 'joinedMeetingModal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    const div = document.createElement('div');
+    div.id = modalId;
+    div.className = 'modal-overlay active';
+    div.innerHTML = `
+      <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(16, 185, 129, 0.2); color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">✓</div>
+            <h3 class="modal-title">Connected to Meeting Room</h3>
+          </div>
+          <button class="modal-close-btn" onclick="document.getElementById('${modalId}').remove()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Meeting Title</div>
+            <h3 style="color: var(--text-primary); margin-top: 2px;">${meeting.title}</h3>
+            ${meeting.description ? `<p style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 4px;">${meeting.description}</p>` : ''}
+          </div>
+
+          <div class="grid-2" style="margin-bottom: 16px;">
+            <div class="card" style="padding: 12px;">
+              <div style="font-size: 0.75rem; color: var(--text-muted);">ROOM CODE</div>
+              <div style="font-family: monospace; font-weight: 700; color: var(--accent-cyan); font-size: 1.05rem;">CNK-${meeting.roomCode}</div>
+            </div>
+            <div class="card" style="padding: 12px;">
+              <div style="font-size: 0.75rem; color: var(--text-muted);">YOUR ROLE</div>
+              <div style="font-weight: 700; color: #10b981; font-size: 1.05rem; text-transform: capitalize;">${role}</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">ACTIVE PARTICIPANTS (${participants?.length || 1})</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; max-height: 140px; overflow-y: auto;">
+              ${(participants || []).map(p => `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-input); border-radius: var(--radius-sm);">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <img src="${p.avatar_url || '/assets/images/default-avatar.png'}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;" />
+                    <span style="font-size: 0.88rem; font-weight: 600;">${p.name || p.email}</span>
+                  </div>
+                  <span class="badge ${p.role === 'host' ? 'badge-primary' : 'badge-mode'}" style="font-size: 0.7rem; text-transform: capitalize;">${p.role}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="padding: 12px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.25); border-radius: var(--radius-md); font-size: 0.82rem; color: #93c5fd;">
+            ℹ️ Phase 1 Attendance session has been initiated in PostgreSQL. Real-time WebRTC media streams & audio/video calling are part of Phase 2.
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between;">
+          <button class="btn btn-secondary" onclick="window.app.handleLeaveRoom('${meeting.roomCode}'); document.getElementById('${modalId}').remove();">Leave Room</button>
+          <button class="btn btn-primary" onclick="document.getElementById('${modalId}').remove()">Stay in Room</button>
+        </div>
+      </div>
+    `;
+    modalContainer.appendChild(div);
+  }
+
+  async handleLeaveRoom(roomCode) {
+    try {
+      this.showLoading(true);
+      await window.api.meetings.leaveRoom(roomCode);
+      this.showToast('You left the meeting room.', 'info');
+      await this.loadMeetingsList();
+    } catch (err) {
+      this.showToast(err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  openScheduleMeetingModal() {
+    const modalContainer = document.getElementById('meetingsModalContainer') || document.body;
+    const modalId = 'scheduleMeetingModal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    // Default scheduled time: 15 minutes in future
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 15);
+    const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+    const div = document.createElement('div');
+    div.id = modalId;
+    div.className = 'modal-overlay active';
+    div.innerHTML = `
+      <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(168, 85, 247, 0.2); color: #c084fc; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">📅</div>
+            <h3 class="modal-title">Schedule a Meeting</h3>
+          </div>
+          <button class="modal-close-btn" onclick="document.getElementById('${modalId}').remove()">&times;</button>
+        </div>
+        <form onsubmit="window.app.handleScheduleMeetingSubmit(event)">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Meeting Title *</label>
+              <input type="text" id="schTitle" class="form-control" placeholder="e.g. CONNEKT Engineering Sprint Review" required />
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Date & Start Time *</label>
+                <input type="datetime-local" id="schDate" class="form-control" value="${localIso}" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Expected Duration</label>
+                <select id="schDuration" class="form-control">
+                  <option value="15">15 Minutes</option>
+                  <option value="30">30 Minutes</option>
+                  <option value="45" selected>45 Minutes</option>
+                  <option value="60">1 Hour</option>
+                  <option value="90">1.5 Hours</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Meeting Description</label>
+              <textarea id="schDescription" class="form-control" rows="2" placeholder="Brief context about this meeting..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Agenda</label>
+              <textarea id="schAgenda" class="form-control" rows="2" placeholder="Topics to cover, goals, action items..."></textarea>
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Attendees (Emails or Usernames)</label>
+                <input type="text" id="schAttendees" class="form-control" placeholder="sarah@connekt.me, alex" />
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Separate with commas.</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Optional Passcode</label>
+                <input type="text" id="schPasscode" class="form-control" placeholder="Leave empty for public" />
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 20px; align-items: center; margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--border-subtle);">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                <input type="checkbox" id="schSendInvites" checked />
+                <span>✉️ Send Email Invitations</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                <input type="checkbox" id="schSyncGoogle" />
+                <span>📅 Sync to Google Calendar</span>
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer" style="display: flex; justify-content: space-between;">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('${modalId}').remove()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Schedule Meeting 📅</button>
+          </div>
+        </form>
+      </div>
+    `;
+    modalContainer.appendChild(div);
+  }
+
+  async handleScheduleMeetingSubmit(e) {
+    e.preventDefault();
+    try {
+      this.showLoading(true);
+      const title = document.getElementById('schTitle').value.trim();
+      const scheduledAt = document.getElementById('schDate').value;
+      const durationMinutes = parseInt(document.getElementById('schDuration').value, 10);
+      const description = document.getElementById('schDescription').value.trim();
+      const agenda = document.getElementById('schAgenda').value.trim();
+      const rawAttendees = document.getElementById('schAttendees').value;
+      const passcode = document.getElementById('schPasscode').value.trim();
+
+      const attendees = rawAttendees ? rawAttendees.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+      const payload = {
+        title,
+        scheduledAt,
+        durationMinutes,
+        description,
+        agenda,
+        attendees,
+        passcode: passcode || undefined
+      };
+
+      const res = await window.api.meetings.scheduleMeeting(payload);
+      const meeting = res.data.meeting;
+
+      // If Google Sync selected, trigger calendar sync
+      const shouldSyncGoogle = document.getElementById('schSyncGoogle')?.checked;
+      if (shouldSyncGoogle && meeting?.id) {
+        try {
+          await window.api.meetings.syncGoogleCalendar(meeting.id);
+        } catch (_) {}
+      }
+
+      // Close modal
+      const modal = document.getElementById('scheduleMeetingModal');
+      if (modal) modal.remove();
+
+      this.showToast('Meeting scheduled successfully!', 'success');
+      await this.loadMeetingsList();
+    } catch (err) {
+      console.error('Failed to schedule meeting:', err);
+      this.showToast(err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  async handleCopyMeetingLink(roomCode, title = 'CONNEKT Meeting') {
+    const link = `${window.location.origin}/meet/${roomCode}`;
+    const text = `Join my CONNEKT Meeting: "${title}"\nRoom Code: ${roomCode}\nDirect Link: ${link}`;
+    await this.handleCopyText(text, 'Meeting invitation copied to clipboard!');
+  }
+
+  async handleCopyText(text, successMsg = 'Copied to clipboard!') {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const t = document.createElement('textarea');
+        t.value = text;
+        document.body.appendChild(t);
+        t.select();
+        document.execCommand('copy');
+        document.body.removeChild(t);
+      }
+      this.showToast(successMsg, 'success');
+    } catch (err) {
+      this.showToast('Failed to copy to clipboard', 'warning');
+    }
+  }
+
+  async handleCancelMeeting(meetingId) {
+    if (!confirm('Are you sure you want to cancel this meeting?')) return;
+    try {
+      this.showLoading(true);
+      await window.api.meetings.cancelMeeting(meetingId);
+      this.showToast('Meeting cancelled.', 'info');
+      await this.loadMeetingsList();
+    } catch (err) {
+      this.showToast(err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  async handleToggleMeetingLock(meetingId, currentLock) {
+    try {
+      this.showLoading(true);
+      const nextLock = !currentLock;
+      const res = await window.api.meetings.toggleLock(meetingId, nextLock);
+      this.showToast(res.message, 'success');
+      await this.loadMeetingsList();
+    } catch (err) {
+      this.showToast(err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  // ====================================================================
+  // MEETING RECORDS, MINUTES & ACTION ITEMS MODAL (PHASE 4)
+  // ====================================================================
+
+  async openMeetingRecordsModal(meetingId) {
+    try {
+      this.showLoading(true);
+
+      const [attRes, minRes, recRes] = await Promise.all([
+        window.api.meetings.getAttendance(meetingId).catch(() => ({ data: { attendance: [], stats: {} } })),
+        window.api.meetings.getMinutes(meetingId).catch(() => ({ data: { meeting: {}, minutes: null, actionItems: [] } })),
+        window.api.meetings.getRecordings(meetingId).catch(() => ({ data: { recordings: [] } }))
+      ]);
+
+      const attendance = attRes.data?.attendance || [];
+      const stats = attRes.data?.stats || { totalParticipants: 0, totalDurationSeconds: 0, averageDurationSeconds: 0 };
+      const minutes = minRes.data?.minutes || { summary: '', discussion_points: '', decisions: '' };
+      const actionItems = minRes.data?.actionItems || [];
+      const recordings = recRes.data?.recordings || [];
+      const meeting = minRes.data?.meeting || {};
+
+      const modalContainer = document.getElementById('meetingsModalContainer') || document.body;
+      const modalId = 'meetingRecordsModal';
+      const existing = document.getElementById(modalId);
+      if (existing) existing.remove();
+
+      const formatDuration = (secs) => {
+        if (!secs || secs < 0) return '0m';
+        const mins = Math.floor(secs / 60);
+        const remSecs = secs % 60;
+        return `${mins}m ${remSecs}s`;
+      };
+
+      const div = document.createElement('div');
+      div.id = modalId;
+      div.className = 'modal-overlay active';
+      div.innerHTML = `
+        <div class="modal-content" style="max-width: 760px; max-height: 90vh; overflow-y: auto;">
+          <div class="modal-header">
+            <div>
+              <div style="font-size: 0.75rem; color: var(--accent-cyan); text-transform: uppercase; font-weight: 700;">Meeting Records & Minutes</div>
+              <h3 class="modal-title" style="margin: 2px 0 0 0;">${meeting.title || 'Meeting Details'}</h3>
+            </div>
+            <button class="modal-close-btn" onclick="document.getElementById('${modalId}').remove()">&times;</button>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 10px 14px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+              <span>Room: <strong style="color: var(--accent-cyan);">CNK-${meeting.roomCode || meeting.room_code || ''}</strong></span>
+              ${meeting.google_synced ? '<span class="badge badge-success" style="font-size: 0.68rem;">📅 Google Synced</span>' : ''}
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button class="btn btn-secondary btn-sm" style="font-size: 0.78rem;" onclick="window.app.syncGoogleCalendarHandler('${meetingId}')">
+                📅 Sync Google Calendar
+              </button>
+              <button class="btn btn-secondary btn-sm" style="font-size: 0.78rem;" onclick="window.app.downloadICalendarHandler('${meetingId}')">
+                📥 Download .ics
+              </button>
+              <button class="btn btn-secondary btn-sm" style="font-size: 0.78rem;" onclick="window.app.sendMeetingInvitesHandler('${meetingId}')">
+                ✉️ Send Invites
+              </button>
+            </div>
+          </div>
+
+          <div class="records-modal-tabs">
+            <button class="records-tab-btn active" data-rec-tab="attendance" onclick="window.app.switchRecordsTab('attendance')">👥 Attendance (${attendance.length})</button>
+            <button class="records-tab-btn" data-rec-tab="minutes" onclick="window.app.switchRecordsTab('minutes')">📝 Minutes & Notes</button>
+            <button class="records-tab-btn" data-rec-tab="actions" onclick="window.app.switchRecordsTab('actions')">✅ Action Items (${actionItems.length})</button>
+            <button class="records-tab-btn" data-rec-tab="recordings" onclick="window.app.switchRecordsTab('recordings')">🎥 Recordings (${recordings.length})</button>
+          </div>
+
+          <!-- Tab 1: Attendance Log -->
+          <div id="pane-attendance" class="records-tab-pane active">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+              <div class="card" style="padding: 12px; text-align: center; background: rgba(255,255,255,0.02);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total Attendees</div>
+                <div style="font-size: 1.4rem; font-weight: 700; color: var(--accent-cyan);">${stats.totalParticipants}</div>
+              </div>
+              <div class="card" style="padding: 12px; text-align: center; background: rgba(255,255,255,0.02);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total Time Logged</div>
+                <div style="font-size: 1.4rem; font-weight: 700; color: var(--text-primary);">${formatDuration(stats.totalDurationSeconds)}</div>
+              </div>
+              <div class="card" style="padding: 12px; text-align: center; background: rgba(255,255,255,0.02);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Avg Participant Duration</div>
+                <div style="font-size: 1.4rem; font-weight: 700; color: var(--color-success);">${formatDuration(stats.averageDurationSeconds)}</div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+              <button class="btn btn-secondary btn-sm" id="btnExportAttendanceCsv">
+                📥 Download Attendance CSV
+              </button>
+            </div>
+
+            ${attendance.length === 0 ? `
+              <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+                No attendance logs found for this meeting yet.
+              </div>
+            ` : `
+              <div style="overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 8px;">
+                <table class="attendance-table">
+                  <thead>
+                    <tr>
+                      <th>Participant</th>
+                      <th>Email</th>
+                      <th>Joined At</th>
+                      <th>Left At</th>
+                      <th>Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${attendance.map(a => `
+                      <tr>
+                        <td style="font-weight: 600;">${a.name || 'Anonymous'}</td>
+                        <td style="color: var(--text-muted); font-size: 0.8rem;">${a.email || '-'}</td>
+                        <td style="font-size: 0.8rem; color: var(--text-secondary);">${new Date(a.joined_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td style="font-size: 0.8rem; color: var(--text-secondary);">${a.left_at ? new Date(a.left_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="status-beacon live" style="font-size: 0.65rem;">Active</span>'}</td>
+                        <td><span class="badge badge-primary">${formatDuration(a.duration_seconds)}</span></td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `}
+          </div>
+
+          <!-- Tab 2: Meeting Minutes & Notes -->
+          <div id="pane-minutes" class="records-tab-pane">
+            <form id="meetingMinutesForm" onsubmit="event.preventDefault(); window.app.saveMinutesHandler('${meetingId}')">
+              <div class="form-group" style="margin-bottom: 14px;">
+                <label class="form-label" style="font-weight: 600;">Meeting Executive Summary</label>
+                <textarea id="minutesSummary" class="form-control" rows="3" placeholder="Overview of the meeting agenda, key highlights, and primary discussions...">${minutes.summary || ''}</textarea>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 14px;">
+                <label class="form-label" style="font-weight: 600;">Discussion Points</label>
+                <textarea id="minutesDiscussion" class="form-control" rows="4" placeholder="Detailed topics discussed, arguments presented, technical evaluations...">${minutes.discussion_points_text || (Array.isArray(minutes.discussion_points) ? minutes.discussion_points.join('\n') : minutes.discussion_points) || ''}</textarea>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label class="form-label" style="font-weight: 600;">Key Decisions Made</label>
+                <textarea id="minutesDecisions" class="form-control" rows="3" placeholder="Final conclusions reached, agreed architectures, policies, or alignments...">${minutes.decisions_text || (Array.isArray(minutes.decisions) ? minutes.decisions.join('\n') : minutes.decisions) || ''}</textarea>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save Meeting Minutes 💾</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Tab 3: Action Items & Tasks -->
+          <div id="pane-actions" class="records-tab-pane">
+            <!-- Add New Action Item Form -->
+            <form id="addActionItemForm" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 14px; margin-bottom: 16px;" onsubmit="event.preventDefault(); window.app.addActionItemHandler('${meetingId}')">
+              <div style="font-weight: 600; font-size: 0.88rem; margin-bottom: 10px; color: var(--accent-cyan);">+ Add Action Item</div>
+              <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <input type="text" id="actionItemTitle" class="form-control" placeholder="Action item title *" required />
+                <input type="text" id="actionItemAssigned" class="form-control" placeholder="Assignee (email/name)" />
+                <select id="actionItemPriority" class="form-control">
+                  <option value="medium">Medium Priority</option>
+                  <option value="high">High Priority</option>
+                  <option value="low">Low Priority</option>
+                </select>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="date" id="actionItemDueDate" class="form-control" style="max-width: 180px;" />
+                <input type="text" id="actionItemDesc" class="form-control" placeholder="Optional details or context..." />
+                <button type="submit" class="btn btn-primary btn-sm" style="white-space: nowrap;">Add Item</button>
+              </div>
+            </form>
+
+            <!-- Action Items List -->
+            <div id="actionItemsListContainer">
+              ${actionItems.length === 0 ? `
+                <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+                  No action items created yet. Add deliverables above!
+                </div>
+              ` : actionItems.map(item => `
+                <div class="action-item-card ${item.status === 'completed' ? 'completed' : ''}">
+                  <input type="checkbox" ${item.status === 'completed' ? 'checked' : ''} style="margin-top: 4px; cursor: pointer;" onchange="window.app.toggleActionItemHandler('${meetingId}', '${item.id}', '${item.status}')" />
+                  <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                      <span class="action-title" style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">${item.title}</span>
+                      <span class="action-priority-badge ${item.priority || 'medium'}">${item.priority || 'medium'}</span>
+                      <span class="badge ${item.status === 'completed' ? 'badge-success' : 'badge-warning'}" style="font-size: 0.7rem;">${item.status}</span>
+                    </div>
+                    ${item.description ? `<p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 4px 0;">${item.description}</p>` : ''}
+                    <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 14px;">
+                      <span>👤 Assigned: <strong>${item.assigned_name || item.assigned_to || 'Unassigned'}</strong></span>
+                      ${item.due_date ? `<span>📅 Due: <strong>${new Date(item.due_date).toLocaleDateString()}</strong></span>` : ''}
+                    </div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    ${item.status !== 'converted' ? `
+                      <button class="btn btn-secondary btn-sm" style="color: var(--accent-cyan); font-size: 0.78rem; padding: 3px 8px;" onclick="window.app.convertActionItemHandler('${meetingId}', '${item.id}')" title="Convert to Task">
+                        🚀 Convert to Task
+                      </button>
+                    ` : `
+                      <span class="badge badge-success" style="font-size: 0.72rem;">✓ Task Created</span>
+                    `}
+                    <button class="btn btn-secondary btn-sm" style="color: var(--color-danger); padding: 2px 6px; font-size: 0.8rem;" onclick="window.app.deleteActionItemHandler('${meetingId}', '${item.id}')" title="Delete action item">
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Tab 4: Meeting Recordings -->
+          <div id="pane-recordings" class="records-tab-pane">
+            ${recordings.length === 0 ? `
+              <div style="text-align: center; padding: 32px; color: var(--text-muted);">
+                <div style="font-size: 2rem; margin-bottom: 8px;">🎥</div>
+                <div style="font-weight: 600; margin-bottom: 4px;">No recordings logged for this meeting</div>
+                <p style="font-size: 0.85rem; max-width: 380px; margin: 0 auto;">
+                  During an active call, click the ⏺️ record button to capture the video stream, audio, and screen share.
+                </p>
+              </div>
+            ` : `
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                ${recordings.map(rec => `
+                  <div class="card" style="display: flex; align-items: center; justify-content: space-between; padding: 14px; background: rgba(255,255,255,0.02);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(239, 68, 68, 0.15); color: #f87171; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🎥</div>
+                      <div>
+                        <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">${rec.file_name}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 12px;">
+                          <span>⏱️ ${formatDuration(rec.duration_seconds)}</span>
+                          <span>💾 ${(rec.file_size_bytes / (1024 * 1024)).toFixed(1)} MB</span>
+                          <span>🕒 ${new Date(rec.created_at).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="badge badge-success" style="font-size: 0.72rem;">Saved to Browser</span>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      modalContainer.appendChild(div);
+
+      // Attach CSV Export Listener
+      const btnCsv = document.getElementById('btnExportAttendanceCsv');
+      if (btnCsv) {
+        btnCsv.onclick = () => {
+          this.downloadAttendanceCsv(meeting.title || 'Meeting', meeting.room_code || 'CNK', attendance);
+        };
+      }
+    } catch (err) {
+      console.error('Error opening meeting records modal:', err);
+      this.showToast('Failed to open meeting records: ' + err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  switchRecordsTab(tabName) {
+    document.querySelectorAll('.records-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.recTab === tabName);
+    });
+    document.querySelectorAll('.records-tab-pane').forEach(pane => {
+      pane.classList.remove('active');
+    });
+    const activePane = document.getElementById(`pane-${tabName}`);
+    if (activePane) activePane.classList.add('active');
+  }
+
+  async saveMinutesHandler(meetingId) {
+    try {
+      this.showLoading(true);
+      const summary = document.getElementById('minutesSummary')?.value || '';
+      const discussionPoints = document.getElementById('minutesDiscussion')?.value || '';
+      const decisions = document.getElementById('minutesDecisions')?.value || '';
+
+      await window.api.meetings.saveMinutes(meetingId, {
+        summary,
+        discussionPoints,
+        decisions
+      });
+
+      this.showToast('Meeting minutes saved successfully!', 'success');
+    } catch (err) {
+      this.showToast('Failed to save minutes: ' + err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  async addActionItemHandler(meetingId) {
+    try {
+      const title = document.getElementById('actionItemTitle')?.value;
+      const assignedTo = document.getElementById('actionItemAssigned')?.value;
+      const priority = document.getElementById('actionItemPriority')?.value;
+      const dueDate = document.getElementById('actionItemDueDate')?.value;
+      const description = document.getElementById('actionItemDesc')?.value;
+
+      if (!title || !title.trim()) {
+        this.showToast('Please provide an action item title.', 'warning');
+        return;
+      }
+
+      this.showLoading(true);
+      await window.api.meetings.addActionItem(meetingId, {
+        title: title.trim(),
+        assignedTo: assignedTo ? assignedTo.trim() : null,
+        priority: priority || 'medium',
+        dueDate: dueDate || null,
+        description: description ? description.trim() : null
+      });
+
+      this.showToast('Action item added!', 'success');
+      // Reopen modal to refresh list
+      await this.openMeetingRecordsModal(meetingId);
+      this.switchRecordsTab('actions');
+    } catch (err) {
+      this.showToast('Failed to add action item: ' + err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  async toggleActionItemHandler(meetingId, itemId, currentStatus) {
+    try {
+      const nextStatus = currentStatus === 'completed' ? 'pending' : 'completed';
+      await window.api.meetings.updateActionItem(meetingId, itemId, { status: nextStatus });
+      this.showToast(`Action item marked ${nextStatus}.`, 'success');
+      await this.openMeetingRecordsModal(meetingId);
+      this.switchRecordsTab('actions');
+    } catch (err) {
+      this.showToast('Failed to update action item: ' + err.message, 'error');
+    }
+  }
+
+  async deleteActionItemHandler(meetingId, itemId) {
+    if (!confirm('Are you sure you want to delete this action item?')) return;
+    try {
+      this.showLoading(true);
+      await window.api.meetings.deleteActionItem(meetingId, itemId);
+      this.showToast('Action item deleted.', 'info');
+      await this.openMeetingRecordsModal(meetingId);
+      this.switchRecordsTab('actions');
+    } catch (err) {
+      this.showToast('Failed to delete action item: ' + err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  downloadAttendanceCsv(meetingTitle, roomCode, attendanceList) {
+    try {
+      const headers = ['Participant Name', 'Email', 'Joined At', 'Left At', 'Duration (Seconds)', 'Duration (Minutes)'];
+      const rows = attendanceList.map(a => [
+        `"${(a.name || 'Anonymous').replace(/"/g, '""')}"`,
+        `"${(a.email || '').replace(/"/g, '""')}"`,
+        `"${a.joined_at ? new Date(a.joined_at).toISOString() : ''}"`,
+        `"${a.left_at ? new Date(a.left_at).toISOString() : ''}"`,
+        a.duration_seconds || 0,
+        ((a.duration_seconds || 0) / 60).toFixed(1)
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `attendance-${roomCode}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+      this.showToast('Attendance report CSV downloaded!', 'success');
+    } catch (e) {
+      this.showToast('Failed to export CSV: ' + e.message, 'error');
+    }
+  }
+
+  // ====================================================================
+  // PHASE 5 INTEGRATION HANDLERS (TASKS, CALENDAR & EMAIL)
+  // ====================================================================
+
+  async convertActionItemHandler(meetingId, itemId) {
+    try {
+      this.showLoading(true);
+      const res = await window.api.meetings.convertActionItemToTask(meetingId, itemId);
+      this.showToast(`Action item converted into task "${res.data.task.title}"!`, 'success');
+      await this.openMeetingRecordsModal(meetingId);
+      this.switchRecordsTab('actions');
+    } catch (err) {
+      this.showToast('Failed to convert action item: ' + err.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  async syncGoogleCalendarHandler(meetingId) {
+    try {
+      this.showLoading(true);
+      const res = await window.api.meetings.syncGoogleCalendar(meetingId);
+      this.showToast('Meeting synchronized to Google Calendar!', 'success');
+      await this.openMeetingRecordsModal(meetingId);
+    } catch (err) {
+      if (err.data?.authRequired) {
+        // Open Google OAuth flow or simulation
+        try {
+          const authRes = await window.api.meetings.getGoogleAuthUrl();
+          if (authRes.data?.configured && authRes.data?.authUrl) {
+            window.open(authRes.data.authUrl, '_blank');
+          } else {
+            // Auto connect via simulated dev mode
+            await window.api.meetings.handleGoogleCallback('dev-simulated-code');
+            await window.api.meetings.syncGoogleCalendar(meetingId);
+            this.showToast('Google Calendar connected (Dev Mode) and meeting synced!', 'success');
+            await this.openMeetingRecordsModal(meetingId);
+          }
+        } catch (authErr) {
+          this.showToast(authErr.message, 'error');
+        }
+      } else {
+        this.showToast(err.message, 'error');
+      }
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  downloadICalendarHandler(meetingId) {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const url = `/api/meetings/${meetingId}/icalendar`;
+      fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to generate iCalendar file');
+          return res.blob();
+        })
+        .then(blob => {
+          const dlUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = dlUrl;
+          a.download = `meeting-${meetingId}.ics`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+          this.showToast('iCalendar (.ics) file downloaded! Open to add to calendar.', 'success');
+        })
+        .catch(err => this.showToast(err.message, 'error'));
+    } catch (e) {
+      this.showToast('Failed to download calendar file: ' + e.message, 'error');
+    }
+  }
+
+  async sendMeetingInvitesHandler(meetingId) {
+    try {
+      this.showLoading(true);
+      const res = await window.api.meetings.sendMeetingInvitations(meetingId);
+      this.showToast(res.message || 'Meeting email invitations sent!', 'success');
+    } catch (err) {
+      this.showToast('Failed to send email invites: ' + err.message, 'error');
+    } finally {
+      this.showLoading(false);
     }
   }
 

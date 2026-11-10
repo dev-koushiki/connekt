@@ -197,6 +197,157 @@ class ApiService {
         method: 'DELETE'
       })
   };
+
+  // Meetings & Collaboration API endpoints (Phase 1)
+  meetings = {
+    createInstantRoom: (title) =>
+      this.request('/meetings/rooms/create', {
+        method: 'POST',
+        body: JSON.stringify({ title: title || 'Instant Meeting' })
+      }),
+
+    getRoom: (roomCode) =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}`),
+
+    joinRoom: (roomCode, passcode = '') =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ passcode })
+      }),
+
+    leaveRoom: (roomCode) =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}/leave`, {
+        method: 'POST'
+      }),
+
+    endRoom: (roomCode) =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}/end`, {
+        method: 'POST'
+      }),
+
+    listMeetings: (params = {}) => {
+      const q = new URLSearchParams(params).toString();
+      return this.request(`/meetings${q ? '?' + q : ''}`);
+    },
+
+    scheduleMeeting: (data) =>
+      this.request('/meetings', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+
+    getMeeting: (id) =>
+      this.request(`/meetings/${id}`),
+
+    updateMeeting: (id, data) =>
+      this.request(`/meetings/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      }),
+
+    cancelMeeting: (id) =>
+      this.request(`/meetings/${id}`, {
+        method: 'DELETE'
+      }),
+
+    toggleLock: (id, isLocked) =>
+      this.request(`/meetings/${id}/lock`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isLocked })
+      }),
+
+    // Signaling & Chat (Phase 2)
+    sendSignal: (roomCode, data) =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}/signal`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+
+    getPendingSignals: (roomCode) =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}/signals`),
+
+    getChatMessages: (roomCode) =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}/chat`),
+
+    sendChatMessage: (roomCode, message) =>
+      this.request(`/meetings/rooms/${encodeURIComponent(roomCode)}/chat`, {
+        method: 'POST',
+        body: JSON.stringify({ message })
+      }),
+
+    // Meeting Records, Minutes & Action Items (Phase 4)
+    getAttendance: (id) =>
+      this.request(`/meetings/${id}/attendance`),
+
+    getMinutes: (id) =>
+      this.request(`/meetings/${id}/minutes`),
+
+    saveMinutes: (id, data) =>
+      this.request(`/meetings/${id}/minutes`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+
+    addActionItem: (id, data) =>
+      this.request(`/meetings/${id}/action-items`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+
+    updateActionItem: (id, itemId, data) =>
+      this.request(`/meetings/${id}/action-items/${itemId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      }),
+
+    deleteActionItem: (id, itemId) =>
+      this.request(`/meetings/${id}/action-items/${itemId}`, {
+        method: 'DELETE'
+      }),
+
+    logRecording: (id, data) =>
+      this.request(`/meetings/${id}/recordings`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+
+    getRecordings: (id) =>
+      this.request(`/meetings/${id}/recordings`),
+
+    // Phase 5: Action Items to Tasks, Google Calendar & Email Integrations
+    convertActionItemToTask: (id, itemId) =>
+      this.request(`/meetings/${id}/action-items/${itemId}/convert`, {
+        method: 'POST'
+      }),
+
+    getGoogleAuthUrl: (redirectUri) =>
+      this.request(`/meetings/google/auth-url${redirectUri ? '?redirectUri=' + encodeURIComponent(redirectUri) : ''}`),
+
+    handleGoogleCallback: (code, redirectUri) =>
+      this.request('/meetings/google/callback', {
+        method: 'POST',
+        body: JSON.stringify({ code, redirectUri })
+      }),
+
+    getGoogleStatus: () =>
+      this.request('/meetings/google/status'),
+
+    disconnectGoogle: () =>
+      this.request('/meetings/google/disconnect', {
+        method: 'POST'
+      }),
+
+    syncGoogleCalendar: (id) =>
+      this.request(`/meetings/${id}/sync-google`, {
+        method: 'POST'
+      }),
+
+    sendMeetingInvitations: (id, recipients = []) =>
+      this.request(`/meetings/${id}/send-invites`, {
+        method: 'POST',
+        body: JSON.stringify({ recipients })
+      })
+  };
 }
 
 // Global API instance
