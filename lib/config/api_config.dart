@@ -18,7 +18,8 @@ class ApiConfig {
 
   // Common network IPs and cloud tunnels tested during auto-detection
   static const List<String> candidateHosts = [
-    'https://swift-hoops-trade.loca.lt', // Active Cloud Tunnel (works on 5G / 4G Mobile Data worldwide!)
+    'https://plain-clouds-take.loca.lt', // Active Cloud Tunnel (works on 5G / 4G Mobile Data worldwide!)
+    'https://swift-hoops-trade.loca.lt',
     '192.168.29.98:5000',               // Current Wi-Fi IP
     '192.168.188.196:5000',             // Previous Wi-Fi IP
     '192.168.1.15:5000',
