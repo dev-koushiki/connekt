@@ -297,15 +297,124 @@ class UserController {
          WHERE u.id != $1 AND (
            LOWER(u.username) LIKE $2 OR 
            LOWER(u.email) LIKE $2 OR 
+           LOWER(COALESCE(u.phone, '')) LIKE $2 OR
            LOWER(COALESCE(p.full_name, '')) LIKE $2
          )
-         ORDER BY full_name ASC LIMIT 50`,
+         ORDER BY full_name ASC LIMIT 200`,
         [req.user.id, q]
       );
       return successResponse(res, 200, 'Contacts retrieved', { contacts: result.rows });
     } catch (err) {
       console.error('[Get Contacts Error]:', err);
       return errorResponse(res, 500, 'Failed to fetch contacts');
+    }
+  }
+
+  /**
+   * Match device phone numbers against registered CONNEKT accounts
+   */
+  static async matchContacts(req, res) {
+    try {
+      const db = require('../config/database');
+      const { phones = [] } = req.body || {};
+      if (!Array.isArray(phones) || phones.length === 0) {
+        return successResponse(res, 200, 'No phones provided', { matches: [] });
+      }
+
+      const last10Set = new Set();
+      for (const raw of phones.slice(0, 500)) {
+        const digits = (raw || '').toString().replace(/\D/g, '');
+        if (digits.length >= 7) {
+          last10Set.add(digits.length > 10 ? digits.slice(-10) : digits);
+        }
+      }
+
+      const tailList = Array.from(last10Set);
+      if (tailList.length === 0) {
+        return successResponse(res, 200, 'No valid phone numbers', { matches: [] });
+      }
+
+      const result = await db.query(
+        `SELECT u.id, u.username, u.email, u.phone,
+                COALESCE(p.full_name, u.username) AS full_name,
+                COALESCE(p.display_name, p.full_name, u.username) AS display_name,
+                COALESCE(p.avatar_url, '') AS avatar_url
+         FROM users u
+         LEFT JOIN user_profiles p ON u.id = p.user_id
+         WHERE u.id != $1
+           AND RIGHT(REGEXP_REPLACE(COALESCE(u.phone, ''), '[^0-9]', '', 'g'), 10) = ANY($2)`,
+        [req.user.id, tailList]
+      );
+
+      return successResponse(res, 200, 'Contacts matched', { matches: result.rows });
+    } catch (err) {
+      console.error('[Match Contacts Error]:', err);
+      return errorResponse(res, 500, 'Failed to match phone contacts');
+    }
+  }
+
+  /**
+   * Send an SMS invitation to a phone contact who does not yet have CONNEKT
+   */
+  static async sendInvite(req, res) {
+    try {
+      const db = require('../config/database');
+      const { sendSms, normalizePhoneNumber } = require('../services/smsService');
+      const rawPhone = (req.body?.phone || '').toString().trim();
+      const contactName = (req.body?.name || '').toString().trim();
+
+      if (!rawPhone) {
+        return errorResponse(res, 400, 'Recipient phone number is required');
+      }
+
+      const formattedPhone = normalizePhoneNumber(rawPhone) || rawPhone;
+      const inviterLabel = req.user.username ? `@${req.user.username}` : 'Your contact';
+      const inviteMessage = contactName
+        ? `Hi ${contactName}, ${inviterLabel} invited you to chat on CONNEKT! Join here: https://connekt.me`
+        : `${inviterLabel} invited you to chat on CONNEKT! Join here: https://connekt.me`;
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS app_invitations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          inviter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          recipient_phone VARCHAR(40) NOT NULL,
+          recipient_name VARCHAR(120) DEFAULT '',
+          dispatched_via VARCHAR(40) DEFAULT 'native_sms_fallback',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      let dispatchedViaGateway = false;
+      try {
+        const smsRes = await sendSms({
+          to: formattedPhone,
+          message: inviteMessage,
+          purpose: 'app_invite'
+        });
+        dispatchedViaGateway = Boolean(smsRes && smsRes.success);
+      } catch (_) {
+        dispatchedViaGateway = false;
+      }
+
+      await db.query(
+        `INSERT INTO app_invitations (inviter_id, recipient_phone, recipient_name, dispatched_via)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          req.user.id,
+          formattedPhone,
+          contactName.slice(0, 120),
+          dispatchedViaGateway ? 'sms_gateway' : 'native_sms_fallback'
+        ]
+      );
+
+      return successResponse(res, 200, dispatchedViaGateway ? 'Invitation SMS sent' : 'Invitation prepared', {
+        phone: formattedPhone,
+        inviteMessage,
+        dispatchedViaGateway
+      });
+    } catch (err) {
+      console.error('[Send Invite Error]:', err);
+      return errorResponse(res, 500, 'Failed to prepare invitation');
     }
   }
 }

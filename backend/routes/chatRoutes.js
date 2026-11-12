@@ -30,6 +30,9 @@ const upload = multer({
 // Get all conversations list
 router.get('/', requireAuth, chatController.getConversations);
 
+// Create a new group conversation
+router.post('/group', requireAuth, chatController.createGroup);
+
 // Get message history with a contact / phone / conversation
 router.get('/:target/messages', requireAuth, chatController.getMessages);
 

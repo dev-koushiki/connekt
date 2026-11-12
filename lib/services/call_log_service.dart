@@ -13,8 +13,14 @@ class CallLogService {
   /// Latest normalized call logs cached in memory for instant display across tabs.
   static List<Map<String, dynamic>> cachedLogs = const [];
 
+  /// Latest normalized phone contacts cached in memory.
+  static List<Map<String, dynamic>> cachedContacts = const [];
+
   /// Last observed native READ_CALL_LOG permission state on Android (null if non-Android).
   static bool? lastPermissionGranted;
+
+  /// Last observed native READ_CONTACTS permission state on Android (null if non-Android).
+  static bool? lastContactsPermissionGranted;
 
   /// Check whether READ_CALL_LOG permission is currently granted.
   static Future<bool> checkPermission() async {
@@ -39,6 +45,99 @@ class CallLogService {
     } on MissingPluginException {
       lastPermissionGranted = null;
       return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Check whether READ_CONTACTS permission is currently granted.
+  static Future<bool> checkContactsPermission() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('checkContactsPermission');
+      lastContactsPermissionGranted = res ?? false;
+      return lastContactsPermissionGranted!;
+    } on MissingPluginException {
+      lastContactsPermissionGranted = null;
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Request runtime READ_CONTACTS permission from the user.
+  static Future<bool> requestContactsPermission() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('requestContactsPermission');
+      lastContactsPermissionGranted = res ?? false;
+      return lastContactsPermissionGranted!;
+    } on MissingPluginException {
+      lastContactsPermissionGranted = null;
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Fetch normalized phone contacts from Android ContactsContract storage.
+  static Future<List<Map<String, dynamic>>> fetchDeviceContacts({
+    int limit = 250,
+    bool requestIfNeeded = false,
+  }) async {
+    if (kIsWeb) return cachedContacts;
+    try {
+      bool hasPerm = await checkContactsPermission();
+      if (!hasPerm && requestIfNeeded) {
+        hasPerm = await requestContactsPermission();
+      }
+      if (!hasPerm) return cachedContacts;
+
+      final raw = await _channel.invokeMethod<List<dynamic>>('getContacts', {'limit': limit});
+      if (raw == null) return cachedContacts;
+
+      final normalized = <Map<String, dynamic>>[];
+      for (final item in raw.whereType<Map>()) {
+        final map = Map<String, dynamic>.from(item);
+        final phone = (map['phone'] ?? map['number'] ?? '').toString().trim();
+        final rawName = (map['name'] ?? map['full_name'] ?? '').toString().trim();
+        final name = rawName.isNotEmpty ? rawName : phone;
+        if (name.isEmpty && phone.isEmpty) continue;
+
+        normalized.add({
+          'id': (map['id'] ?? 'phone_${normalized.length}').toString(),
+          'full_name': name,
+          'name': name,
+          'username': name,
+          'phone': phone,
+          'email': phone,
+          'avatar_url': '',
+          'source': 'phone',
+        });
+      }
+
+      if (normalized.isNotEmpty) {
+        cachedContacts = normalized;
+      }
+      return normalized;
+    } on MissingPluginException {
+      lastContactsPermissionGranted = null;
+      return cachedContacts;
+    } catch (_) {
+      return cachedContacts;
+    }
+  }
+
+  /// Launch native SMS composer with pre-filled CONNEKT invitation text on Android.
+  static Future<bool> openSmsInvite({
+    required String phone,
+    required String message,
+  }) async {
+    if (kIsWeb || phone.trim().isEmpty) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>('sendSmsInvite', {
+        'phone': phone.trim(),
+        'message': message,
+      });
+      return ok ?? false;
     } catch (_) {
       return false;
     }

@@ -127,6 +127,81 @@ class ChatModel {
   }
 
   /**
+   * Create a new group conversation with participants
+   */
+  static async createGroupConversation({ creatorId, title, memberIdentifiers = [] }) {
+    const cleanTitle = (title || '').toString().trim() || 'New Group';
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const convRes = await client.query(
+        `INSERT INTO conversations (type, title, last_message_text, last_message_at, created_at)
+         VALUES ('group', $1, 'Group created', NOW(), NOW())
+         RETURNING id, type, title, last_message_text, last_message_at, created_at`,
+        [cleanTitle]
+      );
+      const conversation = convRes.rows[0];
+
+      // Add creator as participant
+      await client.query(
+        `INSERT INTO conversation_participants (conversation_id, user_id, unread_count, created_at)
+         VALUES ($1, $2, 0, NOW())`,
+        [conversation.id, creatorId]
+      );
+
+      const addedUserIds = new Set([creatorId]);
+      const memberNames = [];
+
+      // Resolve and add each member
+      for (const identifier of memberIdentifiers) {
+        if (!identifier) continue;
+        let user = await this.findUserByIdentifier(identifier);
+        if (!user) {
+          user = await this.findOrCreateContactUser(identifier);
+        }
+        if (user && !addedUserIds.has(user.id)) {
+          addedUserIds.add(user.id);
+          const name = user.display_name || user.full_name || user.username || identifier;
+          memberNames.push(name);
+          await client.query(
+            `INSERT INTO conversation_participants (conversation_id, user_id, unread_count, created_at)
+             VALUES ($1, $2, 0, NOW())`,
+            [conversation.id, user.id]
+          );
+        }
+      }
+
+      // Initial system message
+      await client.query(
+        `INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at)
+         VALUES ($1, $2, $3, true, NOW())`,
+        [conversation.id, creatorId, `Group "${cleanTitle}" created`]
+      );
+
+      await client.query('COMMIT');
+      return {
+        id: conversation.id,
+        type: 'group',
+        title: cleanTitle,
+        name: cleanTitle,
+        target: conversation.id,
+        lastMessage: `Group "${cleanTitle}" created`,
+        time: 'Just now',
+        unread: 0,
+        isOnline: true,
+        isGroup: true,
+        memberCount: addedUserIds.size,
+        members: memberNames
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * List all conversations for a user with participant profiles & unread counters
    */
   static async getConversationsForUser(userId) {
@@ -134,6 +209,7 @@ class ChatModel {
       SELECT
         c.id,
         c.type,
+        c.title,
         c.last_message_text,
         c.last_message_at,
         c.created_at,
@@ -146,9 +222,13 @@ class ChatModel {
         p_peer.avatar_url AS peer_avatar
       FROM conversations c
       JOIN conversation_participants cp_self ON cp_self.conversation_id = c.id AND cp_self.user_id = $1
-      -- Find other participant for direct chats
-      LEFT JOIN conversation_participants cp_peer ON cp_peer.conversation_id = c.id AND cp_peer.user_id != $1
-      LEFT JOIN users u_peer ON u_peer.id = cp_peer.user_id
+      LEFT JOIN LATERAL (
+        SELECT cp.user_id
+        FROM conversation_participants cp
+        WHERE cp.conversation_id = c.id AND cp.user_id != $1
+        LIMIT 1
+      ) single_peer ON c.type = 'direct'
+      LEFT JOIN users u_peer ON u_peer.id = single_peer.user_id
       LEFT JOIN user_profiles p_peer ON p_peer.user_id = u_peer.id
       ORDER BY COALESCE(c.last_message_at, c.created_at) DESC;
     `;
@@ -175,18 +255,22 @@ class ChatModel {
           ? ''
           : rawLastMsg;
 
+      const isGroup = row.type === 'group';
+      const displayName = isGroup ? (row.title || 'Group') : row.peer_name;
+
       return {
         id: row.id,
-        name: row.peer_name,
-        target: row.peer_phone || row.peer_username || row.peer_name,
-        phone: row.peer_phone,
-        username: row.peer_username,
-        avatar: row.peer_avatar || '',
+        name: displayName,
+        target: isGroup ? row.id : (row.peer_phone || row.peer_username || displayName),
+        phone: isGroup ? null : row.peer_phone,
+        username: isGroup ? null : row.peer_username,
+        avatar: isGroup ? '' : (row.peer_avatar || ''),
         lastMessage: sanitizedLastMsg,
         time: formattedTime,
         unread: row.unread_count || 0,
         isOnline: true,
-        type: row.type
+        type: row.type || 'direct',
+        isGroup: isGroup
       };
     });
   }
@@ -236,6 +320,7 @@ class ChatModel {
         time: timeStr,
         isMe: row.sender_id === currentUserId,
         isRead: row.is_read,
+        senderName: row.sender_name || row.sender_username || row.sender_phone || 'Member',
         createdAt: row.created_at
       };
     });

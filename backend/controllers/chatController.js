@@ -1,4 +1,5 @@
 const ChatModel = require('../models/chatModel');
+const db = require('../config/database');
 const { sendSms, normalizePhoneNumber } = require('../services/smsService');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 
@@ -17,7 +18,30 @@ const getConversations = async (req, res) => {
 };
 
 /**
- * Get message history for a conversation or target contact (phone / username)
+ * Create a new group conversation
+ */
+const createGroup = async (req, res) => {
+  try {
+    const creatorId = req.user.id;
+    const { title, members } = req.body;
+    const groupTitle = (title || '').toString().trim() || 'New Group';
+    const memberList = Array.isArray(members) ? members : [];
+
+    const groupConv = await ChatModel.createGroupConversation({
+      creatorId,
+      title: groupTitle,
+      memberIdentifiers: memberList
+    });
+
+    return successResponse(res, 201, 'Group created successfully', groupConv);
+  } catch (err) {
+    console.error('[Create Group Error]:', err);
+    return errorResponse(res, 500, 'Failed to create group', err.message);
+  }
+};
+
+/**
+ * Get message history for a conversation or target contact (phone / username / group title)
  */
 const getMessages = async (req, res) => {
   try {
@@ -35,19 +59,34 @@ const getMessages = async (req, res) => {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target);
 
     if (!isUuid) {
-      // Target is phone number or username
-      peerUser = await ChatModel.findUserByIdentifier(target);
-      if (!peerUser) {
-        // Auto-create contact for new phone number
-        peerUser = await ChatModel.findOrCreateContactUser(target);
-      }
+      // Check if target is a group title the user participates in
+      const groupByName = await db.query(
+        `SELECT c.id, c.type, c.title
+         FROM conversations c
+         JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
+         WHERE c.type = 'group' AND LOWER(c.title) = LOWER($2)
+         ORDER BY c.created_at DESC
+         LIMIT 1;`,
+        [currentUserId, target.trim()]
+      );
 
-      if (!peerUser) {
-        return errorResponse(res, 404, 'Contact not found');
-      }
+      if (groupByName.rows.length > 0) {
+        conversationId = groupByName.rows[0].id;
+      } else {
+        // Target is phone number or username
+        peerUser = await ChatModel.findUserByIdentifier(target);
+        if (!peerUser) {
+          // Auto-create contact for new phone number
+          peerUser = await ChatModel.findOrCreateContactUser(target);
+        }
 
-      const conversation = await ChatModel.findOrCreateDirectConversation(currentUserId, peerUser.id);
-      conversationId = conversation.id;
+        if (!peerUser) {
+          return errorResponse(res, 404, 'Contact not found');
+        }
+
+        const conversation = await ChatModel.findOrCreateDirectConversation(currentUserId, peerUser.id);
+        conversationId = conversation.id;
+      }
     }
 
     const messages = await ChatModel.getMessages(conversationId, currentUserId);
@@ -80,7 +119,54 @@ const sendMessage = async (req, res) => {
     const cleanRecipient = recipient.toString().trim();
     const cleanContent = content.toString().trim();
 
-    // 1. Identify recipient user
+    // Check if recipient is an existing conversation UUID
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanRecipient);
+    let existingConv = null;
+
+    if (isUuid) {
+      const convRes = await db.query(
+        `SELECT c.id, c.type, c.title
+         FROM conversations c
+         JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
+         WHERE c.id = $2
+         LIMIT 1;`,
+        [senderId, cleanRecipient]
+      );
+      if (convRes.rows.length > 0) {
+        existingConv = convRes.rows[0];
+      }
+    } else {
+      // Check if recipient matches a group name the user is in
+      const groupRes = await db.query(
+        `SELECT c.id, c.type, c.title
+         FROM conversations c
+         JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
+         WHERE c.type = 'group' AND LOWER(c.title) = LOWER($2)
+         ORDER BY c.created_at DESC
+         LIMIT 1;`,
+        [senderId, cleanRecipient]
+      );
+      if (groupRes.rows.length > 0) {
+        existingConv = groupRes.rows[0];
+      }
+    }
+
+    if (existingConv) {
+      const savedMsg = await ChatModel.saveMessage({
+        conversationId: existingConv.id,
+        senderId,
+        content: cleanContent
+      });
+
+      return successResponse(res, 201, 'Message sent and recorded successfully', {
+        ...savedMsg,
+        conversationId: existingConv.id,
+        isGroup: existingConv.type === 'group',
+        smsDispatched: false
+      });
+    }
+
+    // 1. Identify recipient user for direct chat
     let peerUser = await ChatModel.findUserByIdentifier(cleanRecipient);
     if (!peerUser) {
       peerUser = await ChatModel.findOrCreateContactUser(cleanRecipient);
@@ -210,6 +296,7 @@ const deleteMessage = async (req, res) => {
 module.exports = {
   getConversations,
   getMessages,
+  createGroup,
   sendMessage,
   uploadFile,
   deleteMessage

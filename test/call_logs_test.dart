@@ -53,7 +53,25 @@ void main() {
     },
   ];
 
-  void installMockChannel({bool granted = true, List<Map<String, dynamic>>? logs}) {
+  final mockDeviceContacts = <Map<String, dynamic>>[
+    {
+      'id': '101',
+      'name': 'Riya Sen',
+      'phone': '+919876500001',
+    },
+    {
+      'id': '102',
+      'name': 'Sayan Das',
+      'phone': '+919876500002',
+    },
+  ];
+
+  void installMockChannel({
+    bool granted = true,
+    bool contactsGranted = true,
+    List<Map<String, dynamic>>? logs,
+    List<Map<String, dynamic>>? contacts,
+  }) {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
       (MethodCall call) async {
@@ -64,6 +82,12 @@ void main() {
             return true;
           case 'getCallLogs':
             return logs ?? mockNativeLogs;
+          case 'checkContactsPermission':
+            return contactsGranted;
+          case 'requestContactsPermission':
+            return true;
+          case 'getContacts':
+            return contacts ?? mockDeviceContacts;
           default:
             return null;
         }
@@ -74,13 +98,17 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     CallLogService.cachedLogs = const [];
+    CallLogService.cachedContacts = const [];
     CallLogService.lastPermissionGranted = null;
+    CallLogService.lastContactsPermissionGranted = null;
   });
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
     CallLogService.cachedLogs = const [];
+    CallLogService.cachedContacts = const [];
     CallLogService.lastPermissionGranted = null;
+    CallLogService.lastContactsPermissionGranted = null;
   });
 
   group('CallLogService normalization & device loading', () {
@@ -121,6 +149,16 @@ void main() {
       expect(logs[1]['type'], 'missed');
       expect(CallLogService.cachedLogs.length, 3);
     });
+
+    test('fetchDeviceContacts returns phone contacts when contacts permission is granted', () async {
+      installMockChannel(contactsGranted: true);
+
+      final contacts = await CallLogService.fetchDeviceContacts(limit: 50);
+      expect(contacts.length, 2);
+      expect(contacts.first['full_name'], 'Riya Sen');
+      expect(contacts.first['phone'], '+919876500001');
+      expect(contacts.first['source'], 'phone');
+    });
   });
 
   group('Call Logs UI integration', () {
@@ -150,20 +188,44 @@ void main() {
       expect(find.text('Arjun Roy'), findsNothing);
     });
 
-    testWidgets('MeetingsScreen renders Call Logs & History when device logs are available', (tester) async {
-      installMockChannel(granted: true);
+    testWidgets('MeetingsScreen dashboard does not show Call Logs & History or sync button', (tester) async {
+      installMockChannel(granted: true, contactsGranted: true);
 
       await tester.pumpWidget(
         MaterialApp(
           home: MeetingsScreen(user: testUser),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
-      expect(find.text('Call Logs & History'), findsOneWidget);
-      expect(find.text('Priya Sharma'), findsOneWidget);
-      expect(find.text('Mom'), findsOneWidget);
-      expect(find.text('Arjun Roy'), findsOneWidget);
+      expect(find.text('Call Logs & History'), findsNothing);
+      expect(find.text('Sync Phone Call Logs'), findsNothing);
+      expect(find.text('Your latest activity will appear here'), findsOneWidget);
+      expect(find.text('Priya Sharma'), findsNothing);
+    });
+
+    testWidgets('MeetingsScreen Start a Call sheet shows device phone contacts', (tester) async {
+      installMockChannel(granted: true, contactsGranted: true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MeetingsScreen(user: testUser),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await tester.tap(find.text('New call'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(find.text('Start a Call'), findsOneWidget);
+      expect(find.text('PHONE CONTACTS (2)'), findsOneWidget);
+      expect(find.text('Riya Sen'), findsOneWidget);
+      expect(find.text('+919876500001'), findsOneWidget);
+      expect(find.text('Sayan Das'), findsOneWidget);
+      expect(find.text('Alex Chen'), findsNothing);
     });
 
     testWidgets('HomeScreen does not show standalone Call Logs card', (tester) async {

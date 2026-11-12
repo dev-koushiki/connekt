@@ -14,6 +14,11 @@ const sessionRoutes = require('./routes/sessionRoutes');
 const meetingRoutes = require('./routes/meetingRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const callRoutes = require('./routes/callRoutes');
+const mailRoutes = require('./routes/mailRoutes');
+const socialRoutes = require('./routes/socialRoutes');
+const professionalRoutes = require('./routes/professionalRoutes');
+const communityRoutes = require('./routes/communityRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const { apiLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
@@ -80,6 +85,11 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/calls', callRoutes);
+app.use('/api/mail', mailRoutes);
+app.use('/api/social', socialRoutes);
+app.use('/api/professional', professionalRoutes);
+app.use('/api/communities', communityRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 // Fallback routing for SPA / Pages
 app.use((req, res) => {

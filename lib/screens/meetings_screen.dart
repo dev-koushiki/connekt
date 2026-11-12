@@ -6,7 +6,6 @@ import '../config/app_theme.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/call_log_service.dart';
-import '../widgets/call_log_tile.dart';
 import '../widgets/safe_avatar.dart';
 import '../widgets/meetings_illustration.dart';
 import 'meeting_call_screen.dart';
@@ -30,18 +29,15 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
   List<Map<String, dynamic>> _allContacts = [];
   bool _isLoadingContacts = false;
 
-  // Recent call activity history
+  // Recent in-app meeting/call activity for this session
   // If empty, displays the empty-state illustration
   final List<Map<String, dynamic>> _recentCalls = [];
-  String _callHistoryFilter = 'All';
-  bool _isSyncingCallLogs = false;
+  bool _contactsPermissionDenied = false;
 
   @override
   void initState() {
     super.initState();
-    CallLogService.syncNotifier.addListener(_onCallSyncUpdated);
     _loadContacts();
-    _loadRecentCallLogs();
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim();
@@ -51,125 +47,79 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
 
   @override
   void dispose() {
-    CallLogService.syncNotifier.removeListener(_onCallSyncUpdated);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
-  void _onCallSyncUpdated() {
-    _loadRecentCallLogs();
+  bool _matchesContactQuery(Map<String, dynamic> contact, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    final name = (contact['full_name'] ?? contact['name'] ?? contact['username'] ?? '')
+        .toString()
+        .toLowerCase();
+    final phone = (contact['phone'] ?? '').toString().toLowerCase();
+    final email = (contact['email'] ?? '').toString().toLowerCase();
+    return name.contains(q) || phone.contains(q) || email.contains(q);
   }
 
-  Future<void> _loadContacts() async {
+  String _contactSubtitle(Map<String, dynamic> contact) {
+    final phone = (contact['phone'] ?? '').toString().trim();
+    if (phone.isNotEmpty) return phone;
+    return (contact['email'] ?? '').toString().trim();
+  }
+
+  Future<void> _loadContacts({bool requestPermission = false}) async {
     setState(() => _isLoadingContacts = true);
+
+    List<Map<String, dynamic>> phoneContacts = [];
+    List<Map<String, dynamic>> apiContacts = [];
+    bool denied = false;
+
     try {
-      final contacts = await ApiService.getContacts();
-      if (mounted) {
-        setState(() {
-          _allContacts = contacts;
-          _isLoadingContacts = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _isLoadingContacts = false);
-      }
-    }
-
-    // If database returned no contacts (or single user), provide registered CONNEKT ecosystem contacts
-    if (_allContacts.isEmpty) {
-      _allContacts = [
-        {
-          'id': 'c1',
-          'username': 'niharika',
-          'full_name': 'Niharika Chatterjee',
-          'email': 'chatterjeeniharika8@gmail.com',
-          'avatar_url': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160',
-        },
-        {
-          'id': 'c2',
-          'username': 'alexchen',
-          'full_name': 'Alex Chen',
-          'email': 'alex.chen@connekt.me',
-          'avatar_url': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160',
-        },
-        {
-          'id': 'c3',
-          'username': 'sarah_j',
-          'full_name': 'Sarah Jenkins',
-          'email': 'sarah.j@connekt.me',
-          'avatar_url': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160',
-        },
-        {
-          'id': 'c4',
-          'username': 'davidkim',
-          'full_name': 'David Kim',
-          'email': 'david.kim@connekt.me',
-          'avatar_url': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160',
-        },
-        {
-          'id': 'c5',
-          'username': 'lena_rivers',
-          'full_name': 'Lena Rivers',
-          'email': 'lena.rivers@connekt.me',
-          'avatar_url': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=160',
-        },
-      ];
-    }
-  }
-
-  Future<void> _loadRecentCallLogs() async {
-    try {
-      final logs = await CallLogService.loadCallLogs(limit: 50);
-      if (!mounted) return;
-      final localSessionCalls = _recentCalls.where((c) => c['isLocalCall'] == true).toList();
-      if (logs.isEmpty && localSessionCalls.isEmpty) return;
-
-      setState(() {
-        _recentCalls
-          ..clear()
-          ..addAll(localSessionCalls);
-        for (final l in logs) {
-          final String type = (l['type'] ?? 'incoming').toString();
-          _recentCalls.add({
-            'name': (l['name'] ?? l['number'] ?? 'Contact').toString(),
-            'number': (l['number'] ?? '').toString(),
-            'email': (l['number'] ?? '').toString(),
-            'avatar': '',
-            'isVideo': false,
-            'isMissed': type == 'missed' || type == 'rejected',
-            'type': type,
-            'duration': l['duration'] ?? 0,
-            'formattedDuration': l['formattedDuration'] ?? '',
-            'formattedTime': l['formattedTime'] ?? 'Recent',
-            'time': l['formattedTime'] ?? 'Recent',
-          });
-        }
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _syncCallLogsNow() async {
-    if (_isSyncingCallLogs) return;
-    setState(() => _isSyncingCallLogs = true);
-    try {
-      final res = await CallLogService.syncCallLogs(limit: 50);
-      await _loadRecentCallLogs();
-      if (!mounted) return;
-      final bool ok = res['success'] == true;
-      final String msg = (res['message'] ?? (ok ? 'Call logs synced.' : 'Unable to load call logs.')).toString();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: ok ? AppTheme.brandBlue : AppTheme.accentCoral,
-        ),
+      phoneContacts = await CallLogService.fetchDeviceContacts(
+        limit: 250,
+        requestIfNeeded: requestPermission,
       );
-    } finally {
-      if (mounted) {
-        setState(() => _isSyncingCallLogs = false);
+      denied = CallLogService.lastContactsPermissionGranted == false;
+    } catch (_) {}
+
+    try {
+      apiContacts = await ApiService.getContacts();
+    } catch (_) {}
+
+    final merged = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addUnique(Map<String, dynamic> item) {
+      final phone = (item['phone'] ?? '').toString().trim();
+      final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+      final email = (item['email'] ?? '').toString().trim().toLowerCase();
+      final name = (item['full_name'] ?? item['name'] ?? item['username'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final key = digits.isNotEmpty
+          ? 'p:$digits'
+          : (email.isNotEmpty ? 'e:$email' : 'n:$name');
+      if (key.length > 2 && seen.add(key)) {
+        merged.add(item);
       }
     }
+
+    for (final c in phoneContacts) {
+      addUnique(c);
+    }
+    for (final c in apiContacts) {
+      addUnique(c);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _allContacts = merged;
+      _contactsPermissionDenied = denied;
+      _isLoadingContacts = false;
+    });
   }
 
   void _startCall({
@@ -661,7 +611,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
 
   void _showNewCallBottomSheet() {
     final searchCtrl = TextEditingController();
-    List<Map<String, dynamic>> filtered = List.from(_allContacts);
+    bool sheetLoading = _isLoadingContacts;
 
     showModalBottomSheet(
       context: context,
@@ -672,6 +622,17 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
+          final filtered = _allContacts
+              .where((c) => _matchesContactQuery(c, searchCtrl.text))
+              .toList();
+
+          Future<void> grantAndReloadContacts() async {
+            setSheetState(() => sheetLoading = true);
+            await _loadContacts(requestPermission: true);
+            if (!ctx.mounted) return;
+            setSheetState(() => sheetLoading = false);
+          }
+
           return Container(
             height: MediaQuery.of(context).size.height * 0.78,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -690,35 +651,36 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Start a Call',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Start a Call',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh_rounded, color: AppTheme.accentBlue, size: 20),
+                      tooltip: 'Refresh contacts',
+                      onPressed: sheetLoading ? null : grantAndReloadContacts,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 const Text(
-                  'Choose a CONNEKT contact to start an audio or video call',
+                  'Choose a contact from your phone to start an audio or video call',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 14),
                 // Search in bottom sheet
                 TextField(
                   controller: searchCtrl,
-                  onChanged: (val) {
-                    final q = val.trim().toLowerCase();
-                    setSheetState(() {
-                      filtered = _allContacts.where((c) {
-                        final name = (c['full_name'] ?? c['username'] ?? '').toString().toLowerCase();
-                        final email = (c['email'] ?? '').toString().toLowerCase();
-                        return name.contains(q) || email.contains(q);
-                      }).toList();
-                    });
-                  },
+                  onChanged: (_) => setSheetState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Search people or email...',
+                    hintText: 'Search contacts by name or number...',
                     hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
                     prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 20),
                     filled: true,
@@ -731,9 +693,9 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'CONNEKT CONTACTS',
-                  style: TextStyle(
+                Text(
+                  'PHONE CONTACTS (${filtered.length})',
+                  style: const TextStyle(
                     color: AppTheme.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -742,15 +704,40 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Expanded(
-                  child: _isLoadingContacts
+                  child: (_isLoadingContacts || sheetLoading)
                       ? const Center(
                           child: CircularProgressIndicator(color: AppTheme.accentBlue),
                         )
                       : filtered.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No contacts found',
-                                style: TextStyle(color: AppTheme.textMuted),
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.contacts_outlined, color: AppTheme.textMuted, size: 42),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _contactsPermissionDenied
+                                        ? 'Allow access to your phone contacts to start calls.'
+                                        : 'No phone contacts found',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 13.5),
+                                  ),
+                                  if (_contactsPermissionDenied) ...[
+                                    const SizedBox(height: 14),
+                                    ElevatedButton.icon(
+                                      onPressed: grantAndReloadContacts,
+                                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                                      label: const Text('Allow Phone Contacts'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.brandBlue,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             )
                       : ListView.separated(
@@ -758,9 +745,9 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                           separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
                           itemBuilder: (context, index) {
                             final c = filtered[index];
-                            final name = c['full_name'] ?? c['username'] ?? 'User';
-                            final email = c['email'] ?? '';
-                            final avatar = c['avatar_url'] ?? '';
+                            final name = (c['full_name'] ?? c['name'] ?? c['username'] ?? 'Contact').toString();
+                            final subtitle = _contactSubtitle(c);
+                            final avatar = (c['avatar_url'] ?? '').toString();
 
                             return ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -779,10 +766,12 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                                 name,
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.5),
                               ),
-                              subtitle: Text(
-                                email,
-                                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                              ),
+                              subtitle: subtitle.isNotEmpty
+                                  ? Text(
+                                      subtitle,
+                                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                                    )
+                                  : null,
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -793,7 +782,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                                       Navigator.pop(ctx);
                                       _startCall(
                                         contactName: name,
-                                        contactEmail: email,
+                                        contactEmail: subtitle,
                                         avatarUrl: avatar,
                                         isVideo: false,
                                       );
@@ -806,7 +795,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                                       Navigator.pop(ctx);
                                       _startCall(
                                         contactName: name,
-                                        contactEmail: email,
+                                        contactEmail: subtitle,
                                         avatarUrl: avatar,
                                         isVideo: true,
                                       );
@@ -835,12 +824,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
 
     final searchResults = _searchQuery.isEmpty
         ? <Map<String, dynamic>>[]
-        : _allContacts.where((c) {
-            final q = _searchQuery.toLowerCase();
-            final name = (c['full_name'] ?? c['username'] ?? '').toString().toLowerCase();
-            final email = (c['email'] ?? '').toString().toLowerCase();
-            return name.contains(q) || email.contains(q);
-          }).toList();
+        : _allContacts.where((c) => _matchesContactQuery(c, _searchQuery)).toList();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF10131C) : const Color(0xFFF6F8FA);
@@ -1175,25 +1159,6 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
               letterSpacing: 0.1,
             ),
           ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _isSyncingCallLogs ? null : _syncCallLogsNow,
-            icon: _isSyncingCallLogs
-                ? const SizedBox(
-                    width: 15,
-                    height: 15,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentBlue),
-                  )
-                : const Icon(Icons.sync_rounded, size: 17, color: AppTheme.accentBlue),
-            label: Text(
-              _isSyncingCallLogs ? 'Syncing Call Logs...' : 'Sync Phone Call Logs',
-              style: const TextStyle(color: AppTheme.accentBlue, fontWeight: FontWeight.w600),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: AppTheme.accentBlue.withValues(alpha: 0.4)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
           const SizedBox(height: 40),
         ],
       ),
@@ -1201,7 +1166,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
   }
 
   // ----------------------------------------------------
-  // RECENT CALL ACTIVITY LIST
+  // RECENT MEETING ACTIVITY LIST
   // ----------------------------------------------------
   Widget _buildRecentActivityList() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1209,91 +1174,87 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
     final borderColor = isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE2E8F0);
     final textPrimary = isDark ? Colors.white : AppTheme.textPrimaryLight;
     final textSecondary = isDark ? const Color(0xFF8E95A5) : const Color(0xFF64748B);
-    final filtered = filterCallLogs(_recentCalls, _callHistoryFilter);
 
-    return ListView.builder(
+    return ListView.separated(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: (filtered.isEmpty ? 1 : filtered.length) + 1,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      itemCount: _recentCalls.length + 1,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         if (index == 0) {
           return Padding(
-            padding: const EdgeInsets.only(left: 4, right: 4, bottom: 10, top: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Call Logs & History',
-                      style: TextStyle(
-                        color: textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: _isSyncingCallLogs ? null : _syncCallLogsNow,
-                      icon: _isSyncingCallLogs
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentBlue),
-                            )
-                          : const Icon(Icons.sync_rounded, size: 16, color: AppTheme.accentBlue),
-                      label: Text(
-                        _isSyncingCallLogs ? 'Syncing...' : 'Sync',
-                        style: const TextStyle(color: AppTheme.accentBlue, fontSize: 12.5, fontWeight: FontWeight.w600),
-                      ),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                CallLogFilterBar(
-                  selectedFilter: _callHistoryFilter,
-                  onSelected: (f) => setState(() => _callHistoryFilter = f),
-                  activeColor: AppTheme.brandBlue,
-                  isDark: isDark,
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (filtered.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 28),
-            child: Center(
-              child: Text(
-                'No $_callHistoryFilter calls in your history.',
-                style: TextStyle(color: textSecondary, fontSize: 13.5),
+            padding: const EdgeInsets.only(left: 4, top: 4, bottom: 2),
+            child: Text(
+              'RECENT ACTIVITY',
+              style: TextStyle(
+                color: textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
               ),
             ),
           );
         }
 
-        final call = filtered[index - 1];
-        final bool isVideo = call['isVideo'] == true;
-        return CallLogTile(
-          call: call,
-          cardColor: cardColor,
-          borderColor: borderColor,
-          textPrimary: textPrimary,
-          textSecondary: textSecondary,
-          actionColor: AppTheme.accentBlue,
-          onCallTap: () {
-            _startCall(
-              contactName: (call['name'] ?? 'Contact').toString(),
-              contactEmail: (call['email'] ?? call['number'] ?? '').toString(),
-              avatarUrl: (call['avatar'] ?? '').toString(),
-              isVideo: isVideo,
-            );
-          },
+        final item = _recentCalls[index - 1];
+        final name = (item['name'] ?? 'Meeting').toString();
+        final subtitle = (item['email'] ?? item['number'] ?? '').toString();
+        final time = (item['time'] ?? item['formattedTime'] ?? 'Recent').toString();
+        final isVideo = item['isVideo'] == true;
+        final avatar = (item['avatar'] ?? '').toString();
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppTheme.brandBlue.withValues(alpha: 0.14),
+                child: Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : 'M',
+                  style: const TextStyle(color: AppTheme.brandBlue, fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: textPrimary, fontSize: 14.5, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle.isNotEmpty ? '$subtitle • $time' : time,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  isVideo ? Icons.videocam_rounded : Icons.phone_outlined,
+                  color: AppTheme.accentBlue,
+                ),
+                onPressed: () => _startCall(
+                  contactName: name,
+                  contactEmail: subtitle,
+                  avatarUrl: avatar,
+                  isVideo: isVideo,
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -1326,9 +1287,9 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final c = results[index];
-        final name = c['full_name'] ?? c['username'] ?? 'User';
-        final email = c['email'] ?? '';
-        final avatar = c['avatar_url'] ?? '';
+        final name = (c['full_name'] ?? c['name'] ?? c['username'] ?? 'Contact').toString();
+        final subtitle = _contactSubtitle(c);
+        final avatar = (c['avatar_url'] ?? '').toString();
 
         return Container(
           padding: const EdgeInsets.all(12),
@@ -1359,10 +1320,11 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                       name,
                       style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w600),
                     ),
-                    Text(
-                      email,
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                    ),
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                      ),
                   ],
                 ),
               ),
@@ -1370,7 +1332,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                 icon: const Icon(Icons.phone_outlined, color: AppTheme.accentBlue, size: 20),
                 onPressed: () => _startCall(
                   contactName: name,
-                  contactEmail: email,
+                  contactEmail: subtitle,
                   avatarUrl: avatar,
                   isVideo: false,
                 ),
@@ -1379,7 +1341,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                 icon: const Icon(Icons.videocam_rounded, color: AppTheme.accentBlue, size: 22),
                 onPressed: () => _startCall(
                   contactName: name,
-                  contactEmail: email,
+                  contactEmail: subtitle,
                   avatarUrl: avatar,
                   isVideo: true,
                 ),

@@ -181,13 +181,15 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       conv['unread'] = 0;
     });
 
-    final targetName = (conv['target'] ?? conv['name'] ?? 'Chat').toString();
-    final avatar = (conv['avatar'] ?? '').toString();
     final bool isGroup = conv['isGroup'] == true || conv['type'] == 'group';
+    final targetName = (isGroup ? (conv['name'] ?? conv['title'] ?? 'Group') : (conv['target'] ?? conv['name'] ?? 'Chat')).toString();
+    final avatar = (conv['avatar'] ?? '').toString();
+    final convId = conv['id']?.toString();
 
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
+          conversationId: convId,
           contactName: targetName,
           avatarUrl: avatar,
           showBackButton: true,
@@ -272,7 +274,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   }
 
   void _muteSelectedChats() {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppTheme.getCardColor(context),
       shape: const RoundedRectangleBorder(
@@ -592,7 +594,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   }
 
   void _showContactInfoSheet(String name, String phone, String avatar) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.getCardColor(context),
@@ -679,7 +681,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void _showNewBroadcastSheet() {
     final broadcastMsgController = TextEditingController();
 
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.getCardColor(context),
@@ -765,11 +767,195 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   // NEW CHAT / GROUP SHEET
   // ====================================================================
 
+  static String _normalizePhoneTail(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 10) return digits.substring(digits.length - 10);
+    return digits;
+  }
+
   void _showNewChatSheet(BuildContext context, {bool forceGroup = false}) {
     final contactController = TextEditingController();
     bool isGroup = forceGroup;
+    bool isLoadingContacts = !isFlutterTestEnv;
+    bool startedLoad = false;
+    bool permissionDenied = CallLogService.lastContactsPermissionGranted == false;
+    String searchQuery = '';
+    List<Map<String, dynamic>> mergedContacts = List<Map<String, dynamic>>.from(
+      CallLogService.cachedContacts.map((c) => {
+            ...c,
+            'has_connekt': c['has_connekt'] == true || c['source'] == 'connekt',
+          }),
+    );
+    final Set<String> invitedKeys = {};
+    final Set<String> sendingInviteKeys = {};
+    final Set<String> selectedGroupMembers = {};
 
-    showModalBottomSheet(
+    Future<void> loadSheetContacts(StateSetter setSheetState, {bool requestPerm = false}) async {
+      setSheetState(() => isLoadingContacts = true);
+      List<Map<String, dynamic>> deviceContacts = List<Map<String, dynamic>>.from(CallLogService.cachedContacts);
+      List<Map<String, dynamic>> connektUsers = [];
+      bool denied = false;
+
+      if (!isFlutterTestEnv) {
+        try {
+          deviceContacts = await CallLogService.fetchDeviceContacts(
+            limit: 250,
+            requestIfNeeded: requestPerm,
+          );
+          denied = CallLogService.lastContactsPermissionGranted == false;
+        } catch (_) {}
+
+        try {
+          final phones = deviceContacts
+              .map((c) => (c['phone'] ?? '').toString().trim())
+              .where((p) => p.isNotEmpty)
+              .toList();
+          final results = await Future.wait([
+            ApiService.getContacts(),
+            ApiService.matchPhoneContacts(phones),
+          ]);
+          final byId = <String, Map<String, dynamic>>{};
+          for (final u in [...results[1], ...results[0]]) {
+            final uid = (u['id'] ?? u['username'] ?? u['phone'] ?? '').toString();
+            if (uid.isNotEmpty) byId[uid] = u;
+          }
+          connektUsers = byId.values.toList();
+        } catch (_) {}
+      }
+
+      // Build lookup indices for registered CONNEKT users
+      final byPhoneTail = <String, Map<String, dynamic>>{};
+      final byEmail = <String, Map<String, dynamic>>{};
+      final byUsername = <String, Map<String, dynamic>>{};
+      for (final u in connektUsers) {
+        final tail = _normalizePhoneTail((u['phone'] ?? '').toString());
+        if (tail.length >= 7) byPhoneTail[tail] = u;
+        final email = (u['email'] ?? '').toString().trim().toLowerCase();
+        if (email.isNotEmpty) byEmail[email] = u;
+        final uname = (u['username'] ?? '').toString().trim().toLowerCase();
+        if (uname.isNotEmpty) byUsername[uname] = u;
+      }
+
+      final combined = <Map<String, dynamic>>[];
+      final seenKeys = <String>{};
+
+      for (final c in deviceContacts) {
+        final phone = (c['phone'] ?? '').toString().trim();
+        final tail = _normalizePhoneTail(phone);
+        final email = (c['email'] ?? '').toString().trim().toLowerCase();
+        final name = (c['full_name'] ?? c['name'] ?? phone).toString().trim();
+        final matched = (tail.length >= 7 ? byPhoneTail[tail] : null) ??
+            (email.isNotEmpty ? byEmail[email] : null) ??
+            byUsername[name.toLowerCase()];
+
+        final dedupeKey = tail.length >= 7 ? 'p:$tail' : 'n:${name.toLowerCase()}';
+        if (!seenKeys.add(dedupeKey)) continue;
+
+        if (matched != null) {
+          combined.add({
+            'id': (matched['id'] ?? c['id'] ?? dedupeKey).toString(),
+            'name': name.isNotEmpty ? name : (matched['full_name'] ?? matched['username'] ?? '').toString(),
+            'username': (matched['username'] ?? '').toString(),
+            'phone': phone.isNotEmpty ? phone : (matched['phone'] ?? '').toString(),
+            'email': (matched['email'] ?? '').toString(),
+            'avatar_url': (matched['avatar_url'] ?? '').toString(),
+            'has_connekt': true,
+          });
+        } else {
+          combined.add({
+            'id': (c['id'] ?? dedupeKey).toString(),
+            'name': name,
+            'username': '',
+            'phone': phone,
+            'email': email,
+            'avatar_url': (c['avatar_url'] ?? '').toString(),
+            'has_connekt': c['has_connekt'] == true || c['source'] == 'connekt',
+          });
+        }
+      }
+
+      for (final u in connektUsers) {
+        final tail = _normalizePhoneTail((u['phone'] ?? '').toString());
+        final uname = (u['username'] ?? '').toString().trim().toLowerCase();
+        final dedupeKey = tail.length >= 7 ? 'p:$tail' : 'u:$uname';
+        if (!seenKeys.add(dedupeKey)) continue;
+        combined.add({
+          'id': (u['id'] ?? dedupeKey).toString(),
+          'name': (u['display_name'] ?? u['full_name'] ?? u['username'] ?? '').toString(),
+          'username': (u['username'] ?? '').toString(),
+          'phone': (u['phone'] ?? '').toString(),
+          'email': (u['email'] ?? '').toString(),
+          'avatar_url': (u['avatar_url'] ?? '').toString(),
+          'has_connekt': true,
+        });
+      }
+
+      // Show CONNEKT users first, then non-CONNEKT phone contacts alphabetically
+      combined.sort((a, b) {
+        final aHas = a['has_connekt'] == true ? 0 : 1;
+        final bHas = b['has_connekt'] == true ? 0 : 1;
+        if (aHas != bHas) return aHas.compareTo(bHas);
+        return (a['name'] ?? '').toString().toLowerCase().compareTo((b['name'] ?? '').toString().toLowerCase());
+      });
+
+      if (!context.mounted) return;
+      setSheetState(() {
+        mergedContacts = combined;
+        permissionDenied = denied;
+        isLoadingContacts = false;
+      });
+    }
+
+    Future<void> handleInviteContact(
+      BuildContext sheetCtx,
+      StateSetter setSheetState,
+      Map<String, dynamic> contact,
+    ) async {
+      final key = (contact['phone'] ?? contact['id'] ?? contact['name']).toString();
+      final name = (contact['name'] ?? 'Friend').toString().trim();
+      final phone = (contact['phone'] ?? '').toString().trim();
+      if (phone.isEmpty || sendingInviteKeys.contains(key)) return;
+
+      setSheetState(() => sendingInviteKeys.add(key));
+      String inviteMsg = name.isNotEmpty
+          ? 'Hi $name, join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me'
+          : 'Join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me';
+      bool sentViaGateway = false;
+
+      if (!isFlutterTestEnv) {
+        final res = await ApiService.sendAppInvite(phone: phone, name: name);
+        sentViaGateway = res['dispatchedViaGateway'] == true;
+        final serverMsg = (res['inviteMessage'] ?? '').toString().trim();
+        if (serverMsg.isNotEmpty) inviteMsg = serverMsg;
+      }
+
+      bool openedSmsComposer = false;
+      if (!sentViaGateway && !isFlutterTestEnv) {
+        openedSmsComposer = await CallLogService.openSmsInvite(phone: phone, message: inviteMsg);
+      }
+
+      if (!sheetCtx.mounted) return;
+      setSheetState(() {
+        sendingInviteKeys.remove(key);
+        invitedKeys.add(key);
+      });
+
+      if (!sentViaGateway && !openedSmsComposer && !isFlutterTestEnv) {
+        await Clipboard.setData(ClipboardData(text: inviteMsg));
+      }
+
+      if (!mounted) return;
+      final snackText = sentViaGateway
+          ? 'Invitation message sent to $name ($phone)'
+          : openedSmsComposer
+              ? 'SMS invite ready for $name ($phone)'
+              : 'Invitation message copied for $name ($phone)';
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text(snackText)),
+      );
+    }
+
+    final sheetFuture = showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.getCardColor(context),
@@ -777,101 +963,405 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        builder: (sheetCtx, setSheetState) {
+          if (!startedLoad) {
+            startedLoad = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!isFlutterTestEnv) {
+                loadSheetContacts(setSheetState, requestPerm: true);
+              }
+            });
+          }
+
+          final q = searchQuery.trim().toLowerCase();
+          final filteredContacts = q.isEmpty || isGroup
+              ? mergedContacts
+              : mergedContacts.where((c) {
+                  final name = (c['name'] ?? '').toString().toLowerCase();
+                  final phone = (c['phone'] ?? '').toString().toLowerCase();
+                  final uname = (c['username'] ?? '').toString().toLowerCase();
+                  final email = (c['email'] ?? '').toString().toLowerCase();
+                  return name.contains(q) || phone.contains(q) || uname.contains(q) || email.contains(q);
+                }).toList();
+
+          return SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    isGroup ? 'New Group' : 'New Conversation',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.getTextPrimary(context),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: AppTheme.textMuted),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  ChoiceChip(
-                    label: const Text('Direct Chat'),
-                    selected: !isGroup,
-                    onSelected: (val) => setSheetState(() => isGroup = false),
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Group Chat'),
-                    selected: isGroup,
-                    onSelected: (val) => setSheetState(() => isGroup = true),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: contactController,
-                autofocus: true,
-                style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: isGroup ? 'Enter group name (e.g. Project Team)...' : 'Enter username, email or phone...',
-                  hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
-                  prefixIcon: Icon(isGroup ? Icons.group_add_rounded : Icons.person_search_rounded, color: AppTheme.accentBlue),
-                  filled: true,
-                  fillColor: AppTheme.getInputColor(context),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D4ED8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: Icon(isGroup ? Icons.groups_rounded : Icons.send_rounded, size: 18, color: Colors.white),
-                  label: Text(isGroup ? 'Create Group' : 'Start Chat', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  onPressed: () async {
-                    final target = contactController.text.trim();
-                    if (target.isEmpty) return;
-                    Navigator.pop(ctx);
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          contactName: target,
-                          avatarUrl: '',
-                          showBackButton: true,
-                          isGroup: isGroup,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isGroup ? 'New Group' : 'New Conversation',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.getTextPrimary(sheetCtx),
                         ),
                       ),
-                    );
-                    _loadConversations();
-                  },
-                ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: AppTheme.textMuted),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Direct Chat'),
+                        selected: !isGroup,
+                        onSelected: (val) => setSheetState(() => isGroup = false),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('Group Chat'),
+                        selected: isGroup,
+                        onSelected: (val) => setSheetState(() => isGroup = true),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: contactController,
+                    autofocus: true,
+                    onChanged: (val) => setSheetState(() => searchQuery = val),
+                    style: TextStyle(color: AppTheme.getTextPrimary(sheetCtx), fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: isGroup ? 'Enter group name (e.g. Project Team)...' : 'Enter username, email or phone...',
+                      hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                      prefixIcon: Icon(isGroup ? Icons.group_add_rounded : Icons.person_search_rounded, color: AppTheme.accentBlue),
+                      filled: true,
+                      fillColor: AppTheme.getInputColor(sheetCtx),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Middle Contacts Section: Fetched Device + CONNEKT Contacts (or Invite non-CONNEKT users)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.getInputColor(sheetCtx),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.contacts_rounded, size: 16, color: AppTheme.brandBlue),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                isGroup
+                                    ? 'Select Contacts (${selectedGroupMembers.length} added)'
+                                    : 'Your Contacts (${filteredContacts.length})',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.getTextPrimary(sheetCtx),
+                                ),
+                              ),
+                            ),
+                            if (permissionDenied && !isLoadingContacts)
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () => loadSheetContacts(setSheetState, requestPerm: true),
+                                child: const Text('Allow Contacts', style: TextStyle(fontSize: 11.5, color: AppTheme.brandBlue)),
+                              )
+                            else if (isLoadingContacts)
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.brandBlue),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        if (isLoadingContacts && filteredContacts.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                              child: Text(
+                                'Fetching your phone contacts...',
+                                style: TextStyle(color: AppTheme.textMuted, fontSize: 12.5),
+                              ),
+                            ),
+                          )
+                        else if (filteredContacts.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: Text(
+                                permissionDenied
+                                    ? 'Allow contacts access to pick friends or send an invite.'
+                                    : (q.isNotEmpty
+                                        ? 'No contacts match "$searchQuery"'
+                                        : 'No phone contacts found yet.'),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12.5),
+                              ),
+                            ),
+                          )
+                        else
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 210),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: filteredContacts.length,
+                              separatorBuilder: (_, __) => Divider(
+                                height: 1,
+                                color: AppTheme.textMuted.withValues(alpha: 0.14),
+                              ),
+                              itemBuilder: (_, idx) {
+                                final c = filteredContacts[idx];
+                                final name = (c['name'] ?? 'Contact').toString();
+                                final username = (c['username'] ?? '').toString().trim();
+                                final phone = (c['phone'] ?? '').toString().trim();
+                                final avatarUrl = (c['avatar_url'] ?? '').toString();
+                                final hasConnekt = c['has_connekt'] == true;
+                                final key = (phone.isNotEmpty ? phone : (c['id'] ?? name)).toString();
+                                final isInvited = invitedKeys.contains(key);
+                                final isSendingInvite = sendingInviteKeys.contains(key);
+                                final memberLabel = name.isNotEmpty ? name : (username.isNotEmpty ? username : phone);
+                                final isSelectedForGroup = selectedGroupMembers.contains(memberLabel);
+
+                                return InkWell(
+                                  borderRadius: BorderRadius.circular(10),
+                                  onTap: () async {
+                                    if (hasConnekt) {
+                                      if (isGroup) {
+                                        setSheetState(() {
+                                          if (isSelectedForGroup) {
+                                            selectedGroupMembers.remove(memberLabel);
+                                          } else {
+                                            selectedGroupMembers.add(memberLabel);
+                                          }
+                                        });
+                                        return;
+                                      }
+                                      final target = username.isNotEmpty ? username : (phone.isNotEmpty ? phone : name);
+                                      Navigator.pop(ctx);
+                                      await Navigator.of(this.context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => ChatScreen(
+                                            contactName: target,
+                                            avatarUrl: avatarUrl,
+                                            showBackButton: true,
+                                          ),
+                                        ),
+                                      );
+                                      _loadConversations();
+                                    } else {
+                                      await handleInviteContact(sheetCtx, setSheetState, c);
+                                    }
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                    child: Row(
+                                      children: [
+                                        SafeAvatar(
+                                          url: avatarUrl,
+                                          fallbackText: name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                          size: 36,
+                                          radius: 18,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 13.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppTheme.getTextPrimary(sheetCtx),
+                                                ),
+                                              ),
+                                              Text(
+                                                hasConnekt
+                                                    ? (username.isNotEmpty
+                                                        ? '@$username${phone.isNotEmpty ? ' • $phone' : ''}'
+                                                        : phone)
+                                                    : '${phone.isNotEmpty ? '$phone • ' : ''}Not on CONNEKT',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        if (hasConnekt && isGroup)
+                                          Icon(
+                                            isSelectedForGroup ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
+                                            color: AppTheme.brandBlue,
+                                            size: 20,
+                                          )
+                                        else if (hasConnekt)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.brandBlue.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: const Text(
+                                              'CONNEKT',
+                                              style: TextStyle(
+                                                color: AppTheme.brandBlue,
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          )
+                                        else
+                                          TextButton.icon(
+                                            style: TextButton.styleFrom(
+                                              backgroundColor: isInvited
+                                                  ? AppTheme.brandBlue.withValues(alpha: 0.12)
+                                                  : AppTheme.brandBlue,
+                                              foregroundColor: isInvited ? AppTheme.brandBlue : Colors.white,
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                            ),
+                                            onPressed: isSendingInvite
+                                                ? null
+                                                : () => handleInviteContact(sheetCtx, setSheetState, c),
+                                            icon: isSendingInvite
+                                                ? const SizedBox(
+                                                    width: 12,
+                                                    height: 12,
+                                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                                  )
+                                                : Icon(
+                                                    isInvited ? Icons.check_rounded : Icons.person_add_alt_1_rounded,
+                                                    size: 14,
+                                                  ),
+                                            label: Text(
+                                              isInvited ? 'Invited' : 'Invite',
+                                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1D4ED8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: Icon(isGroup ? Icons.groups_rounded : Icons.send_rounded, size: 18, color: Colors.white),
+                      label: Text(isGroup ? 'Create Group' : 'Start Chat', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        final input = contactController.text.trim();
+                        final String target;
+                        if (isGroup) {
+                          if (input.isNotEmpty) {
+                            target = input;
+                          } else if (selectedGroupMembers.isNotEmpty) {
+                            target = selectedGroupMembers.take(3).join(', ');
+                          } else {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please select contacts or enter a group name'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+                        } else {
+                          if (input.isEmpty) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a username, phone or select a contact'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+                          target = input;
+                        }
+
+                        final nav = Navigator.of(this.context);
+                        Navigator.pop(ctx);
+
+                        Map<String, dynamic>? createdGroup;
+                        if (isGroup && !isFlutterTestEnv) {
+                          try {
+                            createdGroup = await ApiService.createGroupChat(
+                              target,
+                              selectedGroupMembers.toList(),
+                            );
+                          } catch (_) {}
+                        }
+
+                        if (!mounted) return;
+
+                        await nav.push(
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(
+                              conversationId: createdGroup?['id']?.toString(),
+                              contactName: target,
+                              avatarUrl: '',
+                              showBackButton: true,
+                              isGroup: isGroup,
+                              initialMembers: isGroup && selectedGroupMembers.isNotEmpty
+                                  ? ['You', ...selectedGroupMembers]
+                                  : const ['You', 'Soumo', 'Lena Rivers', 'David Kim'],
+                            ),
+                          ),
+                        );
+                        _loadConversations();
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
+    sheetFuture.whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        contactController.dispose();
+      });
+    });
   }
 
   // ====================================================================
@@ -881,7 +1371,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void _showCreateCallLinkSheet() {
     final link = 'https://connekt.me/call/${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppTheme.getCardColor(context),
       shape: const RoundedRectangleBorder(

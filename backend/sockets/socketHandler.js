@@ -359,6 +359,52 @@ const setupSockets = (io) => {
         }
       }
     });
+
+    /**
+     * Community Live: join broadcast room & broadcast WebRTC offers/answers/ICE + reactions
+     */
+    socket.on('community:join-live', ({ roomCode, isHost = false }) => {
+      if (!roomCode) return;
+      const room = `live:${roomCode}`;
+      socket.join(room);
+      const viewerCount = io.sockets.adapter.rooms.get(room)?.size || 1;
+      io.to(room).emit('community:live-viewers', { roomCode, viewerCount });
+      if (!isHost) {
+        socket.to(room).emit('community:live-viewer-joined', {
+          viewerSocketId: socket.id,
+          userId: socket.user?.id,
+          username: socket.user?.username || 'Viewer'
+        });
+      }
+    });
+
+    socket.on('community:live-signal', ({ roomCode, targetSocketId, signal, type }) => {
+      if (!roomCode || !targetSocketId || !signal) return;
+      io.to(targetSocketId).emit('community:live-signal', {
+        roomCode,
+        senderSocketId: socket.id,
+        signal,
+        type: type || signal.type || 'signal'
+      });
+    });
+
+    socket.on('community:live-reaction', ({ roomCode, reactionType = 'heart' }) => {
+      if (!roomCode) return;
+      io.to(`live:${roomCode}`).emit('community:live-reaction', {
+        roomCode,
+        reactionType,
+        username: socket.user?.username || 'Member',
+        at: new Date().toISOString()
+      });
+    });
+
+    socket.on('community:leave-live', ({ roomCode }) => {
+      if (!roomCode) return;
+      const room = `live:${roomCode}`;
+      socket.leave(room);
+      const viewerCount = io.sockets.adapter.rooms.get(room)?.size || 0;
+      io.to(room).emit('community:live-viewers', { roomCode, viewerCount });
+    });
   });
 };
 

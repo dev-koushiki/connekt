@@ -21,7 +21,7 @@ void main() {
     ),
   );
 
-  testWidgets('HomeScreen renders CONNEKT branding, header, greeting, and 3 cards', (tester) async {
+  testWidgets('HomeScreen renders CONNEKT branding, header, greeting, and 4 module cards', (tester) async {
     int? navigatedIndex;
 
     await tester.pumpWidget(
@@ -45,7 +45,7 @@ void main() {
       findsOneWidget,
     );
 
-    // Verify 3 Cards
+    // Verify 4 Cards (Meetings, Chats, Mails, Social)
     expect(find.text('Meetings'), findsOneWidget);
     expect(find.text('Connect through video and audio meetings.'), findsOneWidget);
 
@@ -54,6 +54,9 @@ void main() {
 
     expect(find.text('Mails'), findsOneWidget);
     expect(find.text('Send, receive and manage your emails.'), findsOneWidget);
+
+    expect(find.text('Social'), findsOneWidget);
+    expect(find.text('Social feed, professional network, jobs and communities.'), findsOneWidget);
     expect(find.text('Call Logs'), findsNothing);
 
     // Tap Meetings card
@@ -70,6 +73,12 @@ void main() {
     await tester.tap(find.text('Mails'));
     await tester.pump();
     expect(navigatedIndex, 3);
+
+    // Tap Social card
+    await tester.scrollUntilVisible(find.text('Social'), 150);
+    await tester.tap(find.text('Social'));
+    await tester.pump();
+    expect(navigatedIndex, 4);
   });
 
   testWidgets('HomeScreen avatar tap navigates to Profile tab', (tester) async {
@@ -89,6 +98,6 @@ void main() {
     // Tap Profile avatar on top right (letter 'A')
     await tester.tap(find.text('A'));
     await tester.pump();
-    expect(navigatedIndex, 4);
+    expect(navigatedIndex, 5);
   });
 }

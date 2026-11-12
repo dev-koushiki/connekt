@@ -303,7 +303,7 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(width: 4),
                   // User Profile Avatar
                   GestureDetector(
-                    onTap: () => onNavigateToTab?.call(4),
+                    onTap: () => onNavigateToTab?.call(5),
                     child: Container(
                       width: 38,
                       height: 38,
@@ -409,6 +409,20 @@ class HomeScreen extends StatelessWidget {
                 badgeColor: AppTheme.accentCoral,
                 infoSnippet: _connektEmail,
                 onTap: () => onNavigateToTab?.call(3),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Card 4: Social
+              _buildAppCard(
+                context: context,
+                icon: Icons.public_rounded,
+                title: 'Social',
+                description: 'Social feed, professional network, jobs and communities.',
+                badgeText: 'NEW',
+                badgeColor: AppTheme.brandBlue,
+                infoSnippet: 'Social • Professional • Community',
+                onTap: () => onNavigateToTab?.call(4),
               ),
 
               const SizedBox(height: 28),

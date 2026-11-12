@@ -31,7 +31,9 @@ router.delete('/experience/:expId', requireAuth, UserController.deleteExperience
 router.get('/privacy', requireAuth, UserController.getPrivacy);
 router.put('/privacy', requireAuth, UserController.updatePrivacy);
 
-// Contacts Search
+// Contacts Search & Matching & App Invites
 router.get('/contacts', requireAuth, UserController.getContacts);
+router.post('/contacts/match', requireAuth, UserController.matchContacts);
+router.post('/invite', requireAuth, UserController.sendInvite);
 
 module.exports = router;

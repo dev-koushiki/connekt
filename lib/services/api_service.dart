@@ -52,6 +52,14 @@ class ApiService {
     } catch (_) {}
   }
 
+  static Map<String, String> authHeaders(String? token) => _headers(token);
+
+  static Future<http.Response> safeRequest(
+    Future<http.Response> Function(String baseUrl) requestFn, {
+    Duration timeout = const Duration(seconds: 5),
+  }) =>
+      _safeRequest(requestFn, timeout: timeout);
+
   static Map<String, String> _headers(String? token) {
     final h = <String, String>{
       'Content-Type': 'application/json',
@@ -460,6 +468,65 @@ class ApiService {
     return [];
   }
 
+  /// Match a list of device phone numbers against registered CONNEKT users.
+  static Future<List<Map<String, dynamic>>> matchPhoneContacts(List<String> phones) async {
+    if (phones.isEmpty) return [];
+    final token = await getToken();
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/users/contacts/match'),
+            headers: _headers(token),
+            body: jsonEncode({'phones': phones}),
+          )
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode < 400) {
+        final data = jsonDecode(res.body);
+        final list = data['data']?['matches'] as List<dynamic>?;
+        if (list != null) {
+          return list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Send an invitation message to a phone contact who does not yet use CONNEKT.
+  static Future<Map<String, dynamic>> sendAppInvite({
+    required String phone,
+    String? name,
+  }) async {
+    final token = await getToken();
+    final safeName = (name ?? '').trim();
+    final fallbackMsg = safeName.isNotEmpty
+        ? 'Hi $safeName, join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me'
+        : 'Join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me';
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/users/invite'),
+            headers: _headers(token),
+            body: jsonEncode({'phone': phone, 'name': safeName}),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode < 400) {
+        final data = jsonDecode(res.body)['data'] as Map<String, dynamic>? ?? {};
+        return {
+          'success': true,
+          'dispatchedViaGateway': data['dispatchedViaGateway'] == true,
+          'inviteMessage': (data['inviteMessage'] ?? fallbackMsg).toString(),
+          'phone': (data['phone'] ?? phone).toString(),
+        };
+      }
+    } catch (_) {}
+    return {
+      'success': false,
+      'dispatchedViaGateway': false,
+      'inviteMessage': fallbackMsg,
+      'phone': phone,
+    };
+  }
+
   static Future<Map<String, dynamic>> createInstantMeeting({String? title}) async {
     final token = await getToken();
     final url = Uri.parse('${ApiConfig.baseUrl}/meetings/rooms/create');
@@ -534,6 +601,30 @@ class ApiService {
     }
   }
 
+  /// Create a new group conversation with title and member identifiers
+  static Future<Map<String, dynamic>?> createGroupChat(String title, List<String> members) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.post(
+          Uri.parse('$base/chats/group'),
+          headers: _headers(token),
+          body: jsonEncode({
+            'title': title.trim(),
+            'members': members,
+          }),
+        );
+      });
+      final data = jsonDecode(res.body);
+      if (res.statusCode >= 400) {
+        return null;
+      }
+      return data['data'] as Map<String, dynamic>?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Get message history for a conversation or target contact (phone / username)
   static Future<List<Map<String, dynamic>>> getChatMessages(String target) async {
     try {
@@ -580,20 +671,32 @@ class ApiService {
     return (data['data'] as Map<String, dynamic>?) ?? {};
   }
 
-  /// Upload a file or audio attachment for chat
+  /// Upload a file or audio attachment for chat (with auto host recovery)
   static Future<Map<String, dynamic>?> uploadChatFile(String filePath, String fileName) async {
     try {
       final token = await getToken();
-      final uri = Uri.parse('${ApiConfig.baseUrl}/chats/upload');
-      final request = http.MultipartRequest('POST', uri);
-      if (token != null && token.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
-      request.headers['bypass-tunnel-reminder'] = 'true';
-      request.files.add(await http.MultipartFile.fromPath('file', filePath, filename: fileName));
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
-      final response = await http.Response.fromStream(streamedResponse);
+      Future<http.Response> sendUpload(String baseUrl) async {
+        final uri = Uri.parse('$baseUrl/chats/upload');
+        final request = http.MultipartRequest('POST', uri);
+        if (token != null && token.isNotEmpty) {
+          request.headers['Authorization'] = 'Bearer $token';
+        }
+        request.headers['bypass-tunnel-reminder'] = 'true';
+        request.files.add(await http.MultipartFile.fromPath('file', filePath, filename: fileName));
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
+        return http.Response.fromStream(streamedResponse);
+      }
+
+      http.Response response;
+      try {
+        response = await sendUpload(ApiConfig.baseUrl);
+      } catch (_) {
+        final recovered = await ApiConfig.autoDetectHost();
+        if (recovered == null) return null;
+        response = await sendUpload(ApiConfig.baseUrl);
+      }
+
       final data = jsonDecode(response.body);
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return data['data'] as Map<String, dynamic>?;

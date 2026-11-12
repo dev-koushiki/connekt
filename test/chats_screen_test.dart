@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:connekt/screens/chats_screen.dart';
 import 'package:connekt/screens/chat_screen.dart';
+import 'package:connekt/services/call_log_service.dart';
 
 void main() {
   testWidgets('ChatsScreen renders clean empty state when no chats exist', (tester) async {
@@ -387,5 +388,144 @@ void main() {
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.indicatorColor, const Color(0xFF1D4ED8));
     expect(tabBar.labelColor, const Color(0xFF1D4ED8));
+  });
+
+  testWidgets('New Conversation fetches contacts between search input and Start Chat, showing Invite for non-CONNEKT users', (tester) async {
+    CallLogService.cachedContacts = [
+      {
+        'id': 'u_connekt_1',
+        'name': 'Alex Chen',
+        'username': 'alexchen',
+        'phone': '+919876500001',
+        'source': 'connekt',
+        'has_connekt': true,
+      },
+      {
+        'id': 'phone_only_2',
+        'name': 'Riya Sharma',
+        'username': '',
+        'phone': '+919876500002',
+        'source': 'phone',
+        'has_connekt': false,
+      },
+    ];
+    addTearDown(() {
+      CallLogService.cachedContacts = const [];
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChatsScreen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Open New Conversation bottom sheet
+    await tester.tap(find.text('Start a Chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('New Conversation'), findsOneWidget);
+    expect(find.text('Your Contacts (2)'), findsOneWidget);
+    expect(find.text('Alex Chen'), findsOneWidget);
+    expect(find.text('CONNEKT'), findsOneWidget);
+    expect(find.text('Riya Sharma'), findsOneWidget);
+    expect(find.text('Invite'), findsOneWidget);
+    expect(find.text('Start Chat'), findsOneWidget);
+
+    // Filter live via upper box
+    await tester.enterText(find.widgetWithText(TextField, 'Enter username, email or phone...'), 'Riya');
+    await tester.pumpAndSettle();
+    expect(find.text('Riya Sharma'), findsOneWidget);
+    expect(find.text('Alex Chen'), findsNothing);
+
+    // Tap Invite on non-CONNEKT user
+    await tester.tap(find.text('Invite'));
+    await tester.pumpAndSettle();
+    expect(find.text('Invited'), findsOneWidget);
+  });
+
+  testWidgets('ChatScreen sends voice note and toggles play/pause', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChatScreen(
+          contactName: 'Soumo',
+          avatarUrl: '',
+          showBackButton: true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Start voice recording via mic icon
+    await tester.tap(find.byIcon(Icons.mic_rounded));
+    await tester.pump();
+    expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
+    expect(find.text('0:00'), findsOneWidget);
+
+    // Advance 1 second and send voice note
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('0:01'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pumpAndSettle();
+
+    // Voice note bubble renders with play button and duration
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    expect(find.text('0:01'), findsOneWidget);
+
+    // Toggle play -> pause -> play
+    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
+    await tester.pump();
+    expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.pause_rounded));
+    await tester.pump();
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+  });
+
+  testWidgets('Create Group button successfully opens group chat with selected members even without typing group name', (tester) async {
+    CallLogService.cachedContacts = [
+      {
+        'id': 'contact_1',
+        'name': 'Alex Chen',
+        'username': 'alex.chen',
+        'phone': '+919876500001',
+        'source': 'phone',
+        'has_connekt': true,
+      },
+    ];
+    addTearDown(() {
+      CallLogService.cachedContacts = const [];
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChatsScreen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Open New Conversation bottom sheet
+    await tester.tap(find.text('Start a Chat'));
+    await tester.pumpAndSettle();
+
+    // Switch to Group Chat
+    await tester.tap(find.text('Group Chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('New Group'), findsOneWidget);
+    expect(find.text('Create Group'), findsOneWidget);
+
+    // Tap on contact Alex Chen to select them for the group
+    await tester.tap(find.text('Alex Chen'));
+    await tester.pumpAndSettle();
+
+    // Tap "Create Group"
+    await tester.tap(find.text('Create Group'));
+    await tester.pumpAndSettle();
+
+    // Verify ChatScreen opened for group with Alex Chen
+    expect(find.text('Alex Chen'), findsOneWidget);
+    expect(find.byIcon(Icons.group), findsWidgets);
   });
 }

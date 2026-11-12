@@ -9,6 +9,7 @@ import '../config/api_config.dart';
 import '../config/app_theme.dart';
 import '../config/subnet_probe_stub.dart' if (dart.library.io) '../config/subnet_probe_io.dart';
 import '../services/api_service.dart';
+import '../services/voice_audio_service.dart';
 import '../widgets/safe_avatar.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class ChatScreen extends StatefulWidget {
   final bool showBackButton;
   final bool isGroup;
   final List<String> initialMembers;
+  final String? conversationId;
 
   const ChatScreen({
     super.key,
@@ -25,6 +27,7 @@ class ChatScreen extends StatefulWidget {
     this.showBackButton = true,
     this.isGroup = false,
     this.initialMembers = const ['You', 'Soumo', 'Lena Rivers', 'David Kim'],
+    this.conversationId,
   });
 
   @override
@@ -41,10 +44,13 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   // Voice recording state
   bool _isRecording = false;
+  bool _isSendingVoice = false;
   int _recordSeconds = 0;
   Timer? _recordTimer;
+  Timer? _amplitudeTimer;
+  final List<double> _liveWaveform = List<double>.filled(14, 0.25);
 
-  // Audio playback simulation state
+  // Audio playback state
   String? _playingMsgId;
   double _playProgress = 0.0;
   Timer? _playTimer;
@@ -92,7 +98,14 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     _searchController.dispose();
     _scrollController.dispose();
     _recordTimer?.cancel();
+    _amplitudeTimer?.cancel();
     _playTimer?.cancel();
+    if (_isRecording && !isFlutterTestEnv) {
+      unawaited(VoiceAudioService.stopRecording(discard: true));
+    }
+    if (_playingMsgId != null && !isFlutterTestEnv) {
+      unawaited(VoiceAudioService.stopPlayback());
+    }
     super.dispose();
   }
 
@@ -105,7 +118,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   Future<void> _loadHistory({bool silent = false}) async {
     try {
-      final rawHistory = await ApiService.getChatMessages(widget.contactName);
+      final lookupTarget = (widget.conversationId != null && widget.conversationId!.isNotEmpty)
+          ? widget.conversationId!
+          : widget.contactName;
+      final rawHistory = await ApiService.getChatMessages(lookupTarget);
       final filtered = rawHistory.where((m) {
         final id = (m['id'] ?? '').toString();
         return !_isDeletedPlaceholder(m) && !_deletedMsgModes.containsKey(id);
@@ -202,7 +218,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   Future<void> _dispatchToBackend(String payloadText, {required String tempId}) async {
     try {
-      final res = await ApiService.sendChatMessage(widget.contactName, payloadText);
+      final target = (widget.conversationId != null && widget.conversationId!.isNotEmpty)
+          ? widget.conversationId!
+          : widget.contactName;
+      final res = await ApiService.sendChatMessage(target, payloadText);
       final serverId = res['id']?.toString();
 
       if (serverId != null && serverId.isNotEmpty) {
@@ -259,10 +278,37 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   // MICROPHONE (VOICE NOTE RECORDING & PLAYBACK)
   // ====================================================================
 
-  void _startVoiceRecording() {
+  Future<void> _startVoiceRecording() async {
+    if (!isFlutterTestEnv) {
+      if (_playingMsgId != null) {
+        await VoiceAudioService.stopPlayback();
+        _playTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _playingMsgId = null;
+            _playProgress = 0.0;
+          });
+        }
+      }
+
+      final startRes = await VoiceAudioService.startRecording();
+      if (!mounted) return;
+      if (!startRes.granted) {
+        _showSnack('Microphone permission is required to record voice notes.');
+        return;
+      }
+      if (!startRes.started) {
+        _showSnack(startRes.error ?? 'Could not start audio recording.');
+        return;
+      }
+    }
+
     setState(() {
       _isRecording = true;
       _recordSeconds = 0;
+      for (var i = 0; i < _liveWaveform.length; i++) {
+        _liveWaveform[i] = 0.25;
+      }
     });
 
     _recordTimer?.cancel();
@@ -275,10 +321,31 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         _recordSeconds++;
       });
     });
+
+    _amplitudeTimer?.cancel();
+    if (!isFlutterTestEnv) {
+      _amplitudeTimer = Timer.periodic(const Duration(milliseconds: 140), (timer) async {
+        if (!mounted || !_isRecording) {
+          timer.cancel();
+          return;
+        }
+        final amp = await VoiceAudioService.getAmplitude();
+        if (!mounted || !_isRecording) return;
+        setState(() {
+          _liveWaveform.removeAt(0);
+          _liveWaveform.add(amp.clamp(0.15, 1.0));
+        });
+      });
+    }
   }
 
-  void _cancelVoiceRecording() {
+  Future<void> _cancelVoiceRecording() async {
     _recordTimer?.cancel();
+    _amplitudeTimer?.cancel();
+    if (!isFlutterTestEnv) {
+      await VoiceAudioService.stopRecording(discard: true);
+    }
+    if (!mounted) return;
     setState(() {
       _isRecording = false;
       _recordSeconds = 0;
@@ -293,28 +360,71 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     );
   }
 
-  void _finishAndSendVoiceRecording() {
+  Future<void> _finishAndSendVoiceRecording() async {
+    if (_isSendingVoice) return;
+    _isSendingVoice = true;
     _recordTimer?.cancel();
+    _amplitudeTimer?.cancel();
+
     final durationSecs = max(_recordSeconds, 1);
     final mins = durationSecs ~/ 60;
     final secs = durationSecs % 60;
     final durationStr = '$mins:${secs.toString().padLeft(2, '0')}';
 
-    setState(() {
-      _isRecording = false;
-      _recordSeconds = 0;
-    });
+    String localPath = '';
+    String? uploadedUrl;
 
+    if (!isFlutterTestEnv) {
+      final stopRes = await VoiceAudioService.stopRecording(discard: false);
+      localPath = stopRes.filePath ?? '';
+      if (localPath.isEmpty || stopRes.sizeBytes <= 0) {
+        _isSendingVoice = false;
+        if (mounted) {
+          setState(() {
+            _isRecording = false;
+            _recordSeconds = 0;
+          });
+          _showSnack('No audio was captured. Please allow microphone access and try again.');
+        }
+        return;
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _recordSeconds = 0;
+      });
+    }
+
+    if (!isFlutterTestEnv && localPath.isNotEmpty) {
+      final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final upRes = await ApiService.uploadChatFile(localPath, fileName);
+      uploadedUrl = upRes?['url']?.toString();
+    }
+
+    _isSendingVoice = false;
     _sendRichMessage({
       'type': 'voice',
       'duration': durationStr,
       'seconds': durationSecs,
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) 'url': uploadedUrl,
+      if (localPath.isNotEmpty) 'localPath': localPath,
     });
   }
 
-  void _togglePlayVoiceNote(String msgId, int durationSeconds) {
+  Future<void> _togglePlayVoiceNote(
+    String msgId,
+    int durationSeconds, {
+    String audioUrl = '',
+    String localPath = '',
+  }) async {
     if (_playingMsgId == msgId) {
       _playTimer?.cancel();
+      if (!isFlutterTestEnv) {
+        await VoiceAudioService.stopPlayback();
+      }
+      if (!mounted) return;
       setState(() {
         _playingMsgId = null;
         _playProgress = 0.0;
@@ -323,13 +433,80 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     }
 
     _playTimer?.cancel();
+
+    final resolvedUrl = audioUrl.startsWith('/') ? '${ApiConfig.rootUrl}$audioUrl' : audioUrl;
+    final hasPlayableAudio = localPath.isNotEmpty || isValidHttpUrl(resolvedUrl);
+
+    if (!isFlutterTestEnv) {
+      if (!hasPlayableAudio) {
+        _showSnack('No playable audio file attached to this voice note.');
+        return;
+      }
+
+      setState(() {
+        _playingMsgId = msgId;
+        _playProgress = 0.0;
+      });
+
+      final primarySource = localPath.isNotEmpty ? localPath : resolvedUrl;
+      final fallbackSource = localPath.isNotEmpty && isValidHttpUrl(resolvedUrl) ? resolvedUrl : '';
+
+      final startedDurationMs = await VoiceAudioService.play(
+        primarySource,
+        fallbackSource: fallbackSource,
+        onComplete: () {
+          _playTimer?.cancel();
+          if (mounted) {
+            setState(() {
+              _playingMsgId = null;
+              _playProgress = 0.0;
+            });
+          }
+        },
+      );
+
+      if (startedDurationMs == null) {
+        if (mounted) {
+          setState(() {
+            _playingMsgId = null;
+            _playProgress = 0.0;
+          });
+          _showSnack('Unable to play audio.');
+        }
+        return;
+      }
+
+      _playTimer = Timer.periodic(const Duration(milliseconds: 150), (timer) async {
+        if (!mounted || _playingMsgId != msgId) {
+          timer.cancel();
+          return;
+        }
+        final status = await VoiceAudioService.getPlaybackStatus();
+        if (!mounted || _playingMsgId != msgId) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          if (status.durationMs > 0) {
+            _playProgress = status.progress;
+          }
+          if (!status.isPlaying && _playProgress > 0.05) {
+            _playingMsgId = null;
+            _playProgress = 0.0;
+            timer.cancel();
+          }
+        });
+      });
+      return;
+    }
+
     setState(() {
       _playingMsgId = msgId;
       _playProgress = 0.0;
     });
 
     const stepMs = 100;
-    final totalSteps = (durationSeconds * 1000) / stepMs;
+    final totalSteps = max((durationSeconds * 1000) / stepMs, 1.0);
 
     _playTimer = Timer.periodic(const Duration(milliseconds: stepMs), (timer) {
       if (!mounted) {
@@ -579,12 +756,22 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         final name = file.name;
         final sizeBytes = await file.length() ?? file.lengthSync() ?? 0;
         final sizeStr = _formatFileSize(sizeBytes);
+        final ext = (file.extension ?? 'audio').toUpperCase();
+        final localPath = file.path ?? '';
+
+        String? uploadedUrl;
+        if (localPath.isNotEmpty) {
+          final upRes = await ApiService.uploadChatFile(localPath, name);
+          uploadedUrl = upRes?['url']?.toString();
+        }
 
         _sendRichMessage({
           'type': 'audio',
           'name': name,
           'size': sizeStr,
-          'duration': '3:24',
+          'ext': ext,
+          if (uploadedUrl != null && uploadedUrl.isNotEmpty) 'url': uploadedUrl,
+          if (localPath.isNotEmpty) 'localPath': localPath,
         });
       }
     } catch (e) {
@@ -646,6 +833,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         if (type == 'voice') {
           final duration = data['duration'] ?? '0:05';
           final durationSecs = (data['seconds'] as int?) ?? 5;
+          final audioUrl = (data['url'] ?? '').toString();
+          final localPath = (data['localPath'] ?? '').toString();
           final msgId = (msg['id'] ?? rawText).toString();
           final isPlaying = _playingMsgId == msgId;
 
@@ -655,7 +844,12 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
               children: [
                 // Play / Pause Circle
                 GestureDetector(
-                  onTap: () => _togglePlayVoiceNote(msgId, durationSecs),
+                  onTap: () => _togglePlayVoiceNote(
+                    msgId,
+                    durationSecs,
+                    audioUrl: audioUrl,
+                    localPath: localPath,
+                  ),
                   child: Container(
                     width: 38,
                     height: 38,
@@ -774,66 +968,82 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
           final name = data['name'] ?? (isAudio ? 'Audio file' : 'Document');
           final size = data['size'] ?? '';
           final ext = (data['ext'] ?? (isAudio ? 'MP3' : 'FILE')).toString().toUpperCase();
+          final audioUrl = (data['url'] ?? '').toString();
+          final localPath = (data['localPath'] ?? '').toString();
+          final msgId = (msg['id'] ?? rawText).toString();
+          final isAudioPlaying = isAudio && _playingMsgId == msgId;
 
-          return Container(
-            width: 220,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isMe ? Colors.black12 : (isDark ? const Color(0xFF131B2E) : Colors.white),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: isAudio ? const Color(0xFFF59E0B) : const Color(0xFF8B5CF6),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Text(
-                      ext.length > 4 ? ext.substring(0, 4) : ext,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+          return GestureDetector(
+            onTap: isAudio
+                ? () => _togglePlayVoiceNote(
+                      msgId,
+                      180,
+                      audioUrl: audioUrl,
+                      localPath: localPath,
+                    )
+                : null,
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isMe ? Colors.black12 : (isDark ? const Color(0xFF131B2E) : Colors.white),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: isAudio ? const Color(0xFFF59E0B) : const Color(0xFF8B5CF6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        ext.length > 4 ? ext.substring(0, 4) : ext,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isMe ? Colors.white : textColor,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isMe ? Colors.white : textColor,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        size,
-                        style: TextStyle(
-                          color: isMe ? Colors.white70 : subtextColor,
-                          fontSize: 10,
+                        const SizedBox(height: 2),
+                        Text(
+                          size,
+                          style: TextStyle(
+                            color: isMe ? Colors.white70 : subtextColor,
+                            fontSize: 10,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Icon(
-                  Icons.arrow_circle_down_rounded,
-                  color: isMe ? Colors.white : AppTheme.brandBlue,
-                  size: 24,
-                ),
-              ],
+                  Icon(
+                    isAudio
+                        ? (isAudioPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded)
+                        : Icons.arrow_circle_down_rounded,
+                    color: isMe ? Colors.white : AppTheme.brandBlue,
+                    size: 26,
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1646,12 +1856,12 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(width: 12),
 
-                // Simulated Live Audio Waveform Bars
+                // Live Audio Waveform Bars
                 Expanded(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: List.generate(14, (i) {
-                      final h = 6.0 + ((i + _recordSeconds) % 5) * 4.0;
+                    children: List.generate(_liveWaveform.length, (i) {
+                      final h = 6.0 + (_liveWaveform[i] * 20.0);
                       return Container(
                         width: 3,
                         height: h,

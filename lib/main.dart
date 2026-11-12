@@ -10,6 +10,7 @@ import 'screens/home_screen.dart';
 import 'screens/meetings_screen.dart';
 import 'screens/chats_screen.dart';
 import 'screens/mail_screen.dart';
+import 'screens/social_screen.dart';
 import 'screens/profile_screen.dart';
 import 'services/theme_service.dart';
 
@@ -228,7 +229,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         user: _user,
         onBackToHome: () => setState(() => _currentIndex = 0),
       ),
-      // Index 4: Profile Module
+      // Index 4: Social Module (Social Mode, Professional Mode & Community)
+      SocialScreen(
+        user: _user,
+        onBackToHome: () => setState(() => _currentIndex = 0),
+      ),
+      // Index 5: Profile Module
       ProfileScreen(
         user: _user,
         onLogout: widget.onLogout,
