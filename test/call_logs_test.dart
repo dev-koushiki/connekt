@@ -166,25 +166,17 @@ void main() {
       expect(find.text('Arjun Roy'), findsOneWidget);
     });
 
-    testWidgets('HomeScreen displays Call Logs card and triggers onOpenCallLogs', (tester) async {
-      bool openedCallLogs = false;
-
+    testWidgets('HomeScreen does not show standalone Call Logs card', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: HomeScreen(
-            user: testUser,
-            onOpenCallLogs: () => openedCallLogs = true,
-          ),
+          home: HomeScreen(user: testUser),
         ),
       );
 
-      final cardFinder = find.text('Call Logs');
-      expect(cardFinder, findsOneWidget);
-      await tester.ensureVisible(cardFinder);
-      await tester.tap(cardFinder);
-      await tester.pump();
-
-      expect(openedCallLogs, isTrue);
+      expect(find.text('Call Logs'), findsNothing);
+      expect(find.text('Meetings'), findsOneWidget);
+      expect(find.text('Chats'), findsOneWidget);
+      expect(find.text('Mails'), findsOneWidget);
     });
   });
 }

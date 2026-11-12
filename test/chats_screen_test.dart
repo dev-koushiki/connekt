@@ -330,7 +330,7 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
   });
 
-  testWidgets('ChatsScreen navigates through WhatsApp sub-tabs: Updates, Calls, Communities', (tester) async {
+  testWidgets('ChatsScreen navigates through sub-tabs: Messages, Updates, Calls (without Communities)', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: ChatsScreen(),
@@ -338,11 +338,11 @@ void main() {
     );
     await tester.pump();
 
-    // 1. Verify sub-tabs exist
+    // 1. Verify sub-tabs exist and Communities is removed
     expect(find.text('Messages'), findsOneWidget);
     expect(find.text('Updates'), findsOneWidget);
     expect(find.text('Calls'), findsOneWidget);
-    expect(find.text('Communities'), findsOneWidget);
+    expect(find.text('Communities'), findsNothing);
 
     // 2. Switch to Updates tab
     await tester.tap(find.text('Updates'));
@@ -350,6 +350,10 @@ void main() {
 
     expect(find.text('My status'), findsOneWidget);
     expect(find.text('RECENT UPDATES'), findsOneWidget);
+    expect(find.text('No recent updates yet'), findsOneWidget);
+    expect(find.text('Lena Rivers'), findsNothing);
+    expect(find.text('David Kim'), findsNothing);
+    expect(find.text('Sarah Connor'), findsNothing);
 
     // 3. Switch to Calls tab
     await tester.tap(find.text('Calls'));
@@ -357,12 +361,31 @@ void main() {
 
     expect(find.text('Create call link'), findsOneWidget);
     expect(find.text('RECENT CALLS'), findsOneWidget);
+  });
 
-    // 4. Switch to Communities tab
-    await tester.tap(find.text('Communities'));
+  testWidgets('ChatsScreen TabBar renders without overflow at narrow 360px phone width and uses blue accent', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChatsScreen(),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Stay connected with a Community'), findsOneWidget);
-    expect(find.text('Start your Community'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Messages'), findsOneWidget);
+    expect(find.text('Updates'), findsOneWidget);
+    expect(find.text('Calls'), findsOneWidget);
+    expect(find.text('Communities'), findsNothing);
+
+    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBar.indicatorColor, const Color(0xFF1D4ED8));
+    expect(tabBar.labelColor, const Color(0xFF1D4ED8));
   });
 }

@@ -88,11 +88,11 @@ class _WhatsAppLockedScreenState extends State<WhatsAppLockedScreen> {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    color: const Color(0xFF1D4ED8).withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: const Center(
-                    child: Icon(Icons.lock_rounded, size: 40, color: Color(0xFF10B981)),
+                    child: Icon(Icons.lock_rounded, size: 40, color: Color(0xFF1D4ED8)),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -146,7 +146,7 @@ class _WhatsAppLockedScreenState extends State<WhatsAppLockedScreen> {
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: const Color(0xFF1D4ED8),
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -156,8 +156,8 @@ class _WhatsAppLockedScreenState extends State<WhatsAppLockedScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextButton.icon(
-                  icon: const Icon(Icons.fingerprint, color: Color(0xFF10B981), size: 24),
-                  label: const Text('Use Biometric Authentication', style: TextStyle(color: Color(0xFF10B981))),
+                  icon: const Icon(Icons.fingerprint, color: Color(0xFF1D4ED8), size: 24),
+                  label: const Text('Use Biometric Authentication', style: TextStyle(color: Color(0xFF1D4ED8))),
                   onPressed: _simulateBiometric,
                 ),
               ],
@@ -217,7 +217,7 @@ class _WhatsAppLockedScreenState extends State<WhatsAppLockedScreen> {
                     ),
                     title: Row(
                       children: [
-                        const Icon(Icons.lock_rounded, size: 14, color: Color(0xFF10B981)),
+                        const Icon(Icons.lock_rounded, size: 14, color: Color(0xFF1D4ED8)),
                         const SizedBox(width: 6),
                         Text(
                           chat['name'] ?? '',

@@ -9,14 +9,12 @@ class HomeScreen extends StatelessWidget {
   final UserModel? user;
   final ValueChanged<int>? onNavigateToTab;
   final ValueChanged<String>? onModeChanged;
-  final VoidCallback? onOpenCallLogs;
 
   const HomeScreen({
     super.key,
     required this.user,
     this.onNavigateToTab,
     this.onModeChanged,
-    this.onOpenCallLogs,
   });
 
   String get _displayName {
@@ -411,20 +409,6 @@ class HomeScreen extends StatelessWidget {
                 badgeColor: AppTheme.accentCoral,
                 infoSnippet: _connektEmail,
                 onTap: () => onNavigateToTab?.call(3),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Card 4: Call Logs
-              _buildAppCard(
-                context: context,
-                icon: Icons.call_rounded,
-                title: 'Call Logs',
-                description: 'View synced phone call history, missed & recent calls.',
-                badgeText: 'PHONE SYNC',
-                badgeColor: const Color(0xFF10B981),
-                infoSnippet: 'Synced with device & Meetings',
-                onTap: onOpenCallLogs ?? () => onNavigateToTab?.call(2),
               ),
 
               const SizedBox(height: 28),

@@ -31,7 +31,7 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Chat backup completed successfully!'),
-            backgroundColor: Color(0xFF10B981),
+            backgroundColor: Color(0xFF1D4ED8),
           ),
         );
       }
@@ -184,7 +184,7 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.wallpaper_rounded, color: Color(0xFF10B981)),
+                  leading: const Icon(Icons.wallpaper_rounded, color: Color(0xFF1D4ED8)),
                   title: Text('Wallpaper', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
                   subtitle: Text('Change chat background color & doodles', style: TextStyle(color: textSecondary, fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right_rounded),
@@ -207,7 +207,7 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
             child: Column(
               children: [
                 SwitchListTile(
-                  activeColor: const Color(0xFF10B981),
+                  activeColor: const Color(0xFF1D4ED8),
                   title: Text('Read receipts', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
                   subtitle: Text('If turned off, you won\'t send or receive blue double ticks', style: TextStyle(color: textSecondary, fontSize: 12)),
                   value: _readReceipts,
@@ -215,7 +215,7 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
                 ),
                 Divider(height: 1, color: borderColor),
                 SwitchListTile(
-                  activeColor: const Color(0xFF10B981),
+                  activeColor: const Color(0xFF1D4ED8),
                   title: Text('Keep chats archived', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
                   subtitle: Text('Archived chats remain archived when new messages arrive', style: TextStyle(color: textSecondary, fontSize: 12)),
                   value: _keepArchived,
@@ -241,7 +241,7 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.cloud_upload_rounded, color: Color(0xFF10B981), size: 28),
+                    const Icon(Icons.cloud_upload_rounded, color: Color(0xFF1D4ED8), size: 28),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -260,7 +260,7 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
                   height: 42,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
+                      backgroundColor: const Color(0xFF1D4ED8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: _isBackingUp ? null : _triggerBackup,
@@ -288,7 +288,7 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
               border: Border.all(color: borderColor),
             ),
             child: ListTile(
-              leading: const Icon(Icons.history_rounded, color: Color(0xFF10B981)),
+              leading: const Icon(Icons.history_rounded, color: Color(0xFF1D4ED8)),
               title: Text('Chat history', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
               subtitle: Text('Export, clear or delete chats', style: TextStyle(color: textSecondary, fontSize: 12)),
               trailing: const Icon(Icons.chevron_right_rounded),

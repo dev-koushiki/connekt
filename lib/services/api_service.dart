@@ -322,7 +322,7 @@ class ApiService {
     final safeName = _normalizeImageFilename(fileName);
 
     Future<http.Response> sendUpload(String baseUrl) async {
-      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/users/avatar'));
+      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/users/profile/avatar'));
       request.headers['Authorization'] = 'Bearer $token';
       request.headers['bypass-tunnel-reminder'] = 'true';
       request.files.add(

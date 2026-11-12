@@ -1676,7 +1676,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
             width: 44,
             height: 44,
             decoration: const BoxDecoration(
-              color: Color(0xFF10B981), // WhatsApp Green
+              color: Color(0xFF1D4ED8),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),

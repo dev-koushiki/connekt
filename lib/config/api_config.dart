@@ -27,7 +27,8 @@ class ApiConfig {
     '192.168.161.196:5000',             // Current Wi-Fi IP
     'localhost:5000',                   // USB Cable reverse mode (adb reverse tcp:5000 tcp:5000)
     '127.0.0.1:5000',
-    'https://silver-geckos-warn.loca.lt', // Active Cloud Tunnel (5G / 4G Mobile Data)
+    'https://fifty-heads-train.loca.lt', // Active Cloud Tunnel (5G / 4G Mobile Data)
+    'https://silver-geckos-warn.loca.lt',
     '192.168.29.98:5000',               // Previous Wi-Fi IP
     '192.168.188.196:5000',             // Previous Wi-Fi IP
     '192.168.1.15:5000',

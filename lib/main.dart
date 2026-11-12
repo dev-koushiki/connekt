@@ -152,7 +152,6 @@ class MainNavigationShell extends StatefulWidget {
 
 class _MainNavigationShellState extends State<MainNavigationShell> {
   int _currentIndex = 0;
-  int _chatsInitialTabIndex = 0;
   late UserModel _user;
   Timer? _callSyncTimer;
 
@@ -211,16 +210,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         user: _user,
         onModeChanged: _onModeChanged,
         onNavigateToTab: (index) {
-          setState(() {
-            if (index == 2) _chatsInitialTabIndex = 0;
-            _currentIndex = index;
-          });
-        },
-        onOpenCallLogs: () {
-          setState(() {
-            _chatsInitialTabIndex = 2;
-            _currentIndex = 2;
-          });
+          setState(() => _currentIndex = index);
         },
       ),
       // Index 1: Meetings Module
@@ -231,7 +221,6 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       // Index 2: Chats Module
       ChatsScreen(
         user: _user,
-        initialTabIndex: _chatsInitialTabIndex,
         onBackToHome: () => setState(() => _currentIndex = 0),
       ),
       // Index 3: Mails Module

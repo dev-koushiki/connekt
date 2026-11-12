@@ -52,7 +52,7 @@ class _WhatsAppArchivedScreenState extends State<WhatsAppArchivedScreen> {
               const SizedBox(height: 16),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                activeColor: const Color(0xFF10B981),
+                activeColor: const Color(0xFF1D4ED8),
                 title: Text(
                   'Keep chats archived',
                   style: TextStyle(
@@ -115,7 +115,7 @@ class _WhatsAppArchivedScreenState extends State<WhatsAppArchivedScreen> {
             color: isDark ? const Color(0xFF131D31) : const Color(0xFFF1F5F9),
             child: Row(
               children: [
-                const Icon(Icons.archive_outlined, size: 20, color: Color(0xFF10B981)),
+                const Icon(Icons.archive_outlined, size: 20, color: Color(0xFF1D4ED8)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -185,7 +185,7 @@ class _WhatsAppArchivedScreenState extends State<WhatsAppArchivedScreen> {
                             children: [
                               Text(chat['time'] ?? '', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                               IconButton(
-                                icon: const Icon(Icons.unarchive_outlined, color: Color(0xFF10B981)),
+                                icon: const Icon(Icons.unarchive_outlined, color: Color(0xFF1D4ED8)),
                                 tooltip: 'Unarchive chat',
                                 onPressed: () {
                                   widget.onUnarchive(chat);

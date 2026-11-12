@@ -112,7 +112,7 @@ class _WhatsAppStatusViewerState extends State<WhatsAppStatusViewer>
       SnackBar(
         content: Text('Replied to ${widget.userName}: $reaction'),
         duration: const Duration(seconds: 2),
-        backgroundColor: const Color(0xFF10B981),
+        backgroundColor: const Color(0xFF1D4ED8),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -332,7 +332,7 @@ class _WhatsAppStatusViewerState extends State<WhatsAppStatusViewer>
                         const SizedBox(width: 8),
                         CircleAvatar(
                           radius: 22,
-                          backgroundColor: const Color(0xFF10B981),
+                          backgroundColor: const Color(0xFF1D4ED8),
                           child: IconButton(
                             icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                             onPressed: () {
@@ -473,7 +473,7 @@ class _WhatsAppTextStatusCreatorState extends State<WhatsAppTextStatusCreator> {
               child: Align(
                 alignment: Alignment.bottomRight,
                 child: FloatingActionButton(
-                  backgroundColor: const Color(0xFF10B981),
+                  backgroundColor: const Color(0xFF1D4ED8),
                   child: const Icon(Icons.send_rounded, color: Colors.white),
                   onPressed: () {
                     final text = _textController.text.trim();

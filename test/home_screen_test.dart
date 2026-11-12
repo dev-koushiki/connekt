@@ -54,6 +54,7 @@ void main() {
 
     expect(find.text('Mails'), findsOneWidget);
     expect(find.text('Send, receive and manage your emails.'), findsOneWidget);
+    expect(find.text('Call Logs'), findsNothing);
 
     // Tap Meetings card
     await tester.tap(find.text('Meetings'));

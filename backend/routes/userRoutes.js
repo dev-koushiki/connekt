@@ -10,6 +10,7 @@ router.post('/mode', requireAuth, UserController.switchMode);
 // Personal Profile
 router.put('/profile/personal', requireAuth, UserController.updatePersonalProfile);
 router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), UserController.uploadAvatar);
+router.post('/avatar', requireAuth, uploadAvatar.single('avatar'), UserController.uploadAvatar);
 
 // Professional Profile
 router.put('/profile/professional', requireAuth, UserController.updateProfessionalProfile);

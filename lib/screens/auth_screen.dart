@@ -358,7 +358,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ActionChip(
                         avatar: const Icon(Icons.cloud_outlined, size: 14),
                         label: const Text('5G Mobile Data (Cloud Tunnel)', style: TextStyle(fontSize: 11)),
-                        onPressed: () => setDialogState(() => hostController.text = 'https://silver-geckos-warn.loca.lt'),
+                        onPressed: () => setDialogState(() => hostController.text = 'https://fifty-heads-train.loca.lt'),
                       ),
                       ActionChip(
                         label: Text('Wi-Fi (${ApiConfig.defaultHost})', style: const TextStyle(fontSize: 11)),

@@ -61,12 +61,12 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
               decoration: BoxDecoration(
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF10B981), width: 2),
+                border: Border.all(color: const Color(0xFF1D4ED8), width: 2),
               ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  const Icon(Icons.qr_code_scanner_rounded, size: 100, color: Color(0xFF10B981)),
+                  const Icon(Icons.qr_code_scanner_rounded, size: 100, color: Color(0xFF1D4ED8)),
                   Positioned(
                     bottom: 12,
                     child: Container(
@@ -87,7 +87,7 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
             const SizedBox(height: 24),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
+                backgroundColor: const Color(0xFF1D4ED8),
                 minimumSize: const Size(double.infinity, 44),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -106,7 +106,7 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Device successfully linked!'),
-                    backgroundColor: Color(0xFF10B981),
+                    backgroundColor: Color(0xFF1D4ED8),
                   ),
                 );
               },
@@ -185,11 +185,11 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
                     width: 70,
                     height: 70,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      color: const Color(0xFF1D4ED8).withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: const Center(
-                      child: Icon(Icons.devices_rounded, size: 36, color: Color(0xFF10B981)),
+                      child: Icon(Icons.devices_rounded, size: 36, color: Color(0xFF1D4ED8)),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -214,7 +214,7 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
                     height: 44,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
+                        backgroundColor: const Color(0xFF1D4ED8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
@@ -273,7 +273,7 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
                     child: ListTile(
                       leading: CircleAvatar(
                         backgroundColor: AppTheme.getInputColor(context),
-                        child: Icon(item['icon'] as IconData, color: const Color(0xFF10B981)),
+                        child: Icon(item['icon'] as IconData, color: const Color(0xFF1D4ED8)),
                       ),
                       title: Text(
                         item['browser'],
@@ -282,7 +282,7 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
                       subtitle: Text(
                         item['lastActive'],
                         style: TextStyle(
-                          color: isActive ? const Color(0xFF10B981) : textSecondary,
+                          color: isActive ? const Color(0xFF1D4ED8) : textSecondary,
                           fontSize: 12,
                           fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                         ),

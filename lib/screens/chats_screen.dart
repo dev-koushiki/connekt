@@ -55,52 +55,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   final List<StatusItem> _myStatusItems = [];
 
   // Contact status updates (Updates tab)
-  final List<Map<String, dynamic>> _contactStatuses = [
-    {
-      'name': 'Lena Rivers',
-      'avatar': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120',
-      'timeAgo': '28 minutes ago',
-      'viewed': false,
-      'items': [
-        StatusItem(
-          text: '🚀 Shipped the new Connekt mobile release! Check out the updated design.',
-          backgroundColor: Color(0xFF0F766E),
-          time: '28 minutes ago',
-        ),
-        StatusItem(
-          text: 'Weekend hackathon starting in 2 days. Ping me if you want to team up! 🔥',
-          backgroundColor: Color(0xFF1E3A8A),
-          time: '15 minutes ago',
-        ),
-      ],
-    },
-    {
-      'name': 'David Kim',
-      'avatar': '',
-      'timeAgo': 'Today, 9:15 am',
-      'viewed': false,
-      'items': [
-        StatusItem(
-          text: 'Morning coffee ☕ + Clean Flutter code = Perfection',
-          backgroundColor: Color(0xFF7C2D12),
-          time: 'Today, 9:15 am',
-        ),
-      ],
-    },
-    {
-      'name': 'Sarah Connor',
-      'avatar': '',
-      'timeAgo': 'Yesterday, 8:40 pm',
-      'viewed': true,
-      'items': [
-        StatusItem(
-          text: 'Deploying servers across 4 regions worldwide 🌐',
-          backgroundColor: Color(0xFF581C87),
-          time: 'Yesterday, 8:40 pm',
-        ),
-      ],
-    },
-  ];
+  final List<Map<String, dynamic>> _contactStatuses = [];
 
   // Calls list (Calls tab)
   final List<Map<String, dynamic>> _callLogs = [];
@@ -112,9 +67,9 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 4,
+      length: 3,
       vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 3),
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
     );
     _tabController.addListener(() {
       if (mounted) setState(() {});
@@ -136,7 +91,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void didUpdateWidget(covariant ChatsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initialTabIndex != oldWidget.initialTabIndex) {
-      final targetIndex = widget.initialTabIndex.clamp(0, 3);
+      final targetIndex = widget.initialTabIndex.clamp(0, 2);
       if (_tabController.index != targetIndex) {
         _tabController.animateTo(targetIndex);
       }
@@ -182,7 +137,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
-          backgroundColor: ok ? const Color(0xFF10B981) : AppTheme.accentCoral,
+          backgroundColor: ok ? const Color(0xFF1D4ED8) : AppTheme.accentCoral,
         ),
       );
     } finally {
@@ -420,7 +375,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Chat(s) moved to Locked Chats'),
-        backgroundColor: Color(0xFF10B981),
+        backgroundColor: Color(0xFF1D4ED8),
       ),
     );
   }
@@ -582,7 +537,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF10B981)),
+                    icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF1D4ED8)),
                     tooltip: 'Message',
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -590,7 +545,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.phone_rounded, color: Color(0xFF10B981)),
+                    icon: const Icon(Icons.phone_rounded, color: Color(0xFF1D4ED8)),
                     tooltip: 'Voice Call',
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -598,7 +553,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.videocam_rounded, color: Color(0xFF10B981)),
+                    icon: const Icon(Icons.videocam_rounded, color: Color(0xFF1D4ED8)),
                     tooltip: 'Video Call',
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -606,7 +561,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.info_outline_rounded, color: Color(0xFF10B981)),
+                    icon: const Icon(Icons.info_outline_rounded, color: Color(0xFF1D4ED8)),
                     tooltip: 'View Info',
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -656,7 +611,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             Text(phone, style: const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
             const SizedBox(height: 20),
             ListTile(
-              leading: const Icon(Icons.lock_rounded, color: Color(0xFF10B981)),
+              leading: const Icon(Icons.lock_rounded, color: Color(0xFF1D4ED8)),
               title: const Text('Lock Chat'),
               subtitle: const Text('Require passcode or biometric to open this conversation'),
               trailing: const Icon(Icons.chevron_right_rounded),
@@ -689,7 +644,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(isVideo ? Icons.videocam_rounded : Icons.phone_rounded, color: const Color(0xFF10B981)),
+            Icon(isVideo ? Icons.videocam_rounded : Icons.phone_rounded, color: const Color(0xFF1D4ED8)),
             const SizedBox(width: 10),
             Text(isVideo ? 'Video Call' : 'Voice Call'),
           ],
@@ -781,7 +736,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 height: 44,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: const Color(0xFF1D4ED8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   icon: const Icon(Icons.campaign_rounded, color: Colors.white, size: 20),
@@ -793,7 +748,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Broadcast sent to all contacts: "$text"'),
-                        backgroundColor: const Color(0xFF10B981),
+                        backgroundColor: const Color(0xFF1D4ED8),
                       ),
                     );
                   },
@@ -889,7 +844,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 height: 46,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: const Color(0xFF1D4ED8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   icon: Icon(isGroup ? Icons.groups_rounded : Icons.send_rounded, size: 18, color: Colors.white),
@@ -943,10 +898,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    color: const Color(0xFF1D4ED8).withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.link_rounded, color: Color(0xFF10B981), size: 24),
+                  child: const Icon(Icons.link_rounded, color: Color(0xFF1D4ED8), size: 24),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -983,7 +938,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.copy_rounded, color: Color(0xFF10B981), size: 20),
+                    icon: const Icon(Icons.copy_rounded, color: Color(0xFF1D4ED8), size: 20),
                     tooltip: 'Copy link',
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: link));
@@ -1001,7 +956,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
               height: 44,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
+                  backgroundColor: const Color(0xFF1D4ED8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.share_rounded, color: Colors.white, size: 18),
@@ -1053,7 +1008,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Status update posted!'),
-                backgroundColor: Color(0xFF10B981),
+                backgroundColor: Color(0xFF1D4ED8),
               ),
             );
           },
@@ -1085,45 +1040,60 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       body: SafeArea(
         child: Column(
           children: [
-            // WhatsApp Tabs Header
+            // Tabs Header
             Container(
               color: bgColor,
               child: TabBar(
                 controller: _tabController,
                 isScrollable: false,
-                indicatorColor: const Color(0xFF10B981),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                indicatorColor: const Color(0xFF1D4ED8),
                 indicatorWeight: 3,
-                labelColor: const Color(0xFF10B981),
+                labelColor: const Color(0xFF1D4ED8),
                 unselectedLabelColor: textSecondary,
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
                 tabs: [
                   Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.chat_bubble_rounded, size: 16),
-                        const SizedBox(width: 6),
-                        const Text('Messages'),
-                        if (totalUnreadChats > 0) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981),
-                              borderRadius: BorderRadius.circular(10),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.chat_bubble_rounded, size: 15),
+                          const SizedBox(width: 4),
+                          const Text('Messages', maxLines: 1, softWrap: false),
+                          if (totalUnreadChats > 0) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1D4ED8),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$totalUnreadChats',
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
                             ),
-                            child: Text(
-                              '$totalUnreadChats',
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                  const Tab(text: 'Updates'),
-                  const Tab(text: 'Calls'),
-                  const Tab(text: 'Communities'),
+                  const Tab(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Updates', maxLines: 1, softWrap: false),
+                    ),
+                  ),
+                  const Tab(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Calls', maxLines: 1, softWrap: false),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1139,8 +1109,6 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                   _buildUpdatesTab(context, isDark, cardColor, textPrimary, textSecondary, borderColor),
                   // Tab 2: Calls (WhatsApp Call logs & Call link)
                   _buildCallsTab(context, isDark, cardColor, textPrimary, textSecondary, borderColor),
-                  // Tab 3: Communities
-                  _buildCommunitiesTab(context, isDark, cardColor, textPrimary, textSecondary),
                 ],
               ),
             ),
@@ -1170,10 +1138,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              color: const Color(0xFF1D4ED8).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF10B981), size: 20),
+            child: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF1D4ED8), size: 20),
           ),
           const SizedBox(width: 10),
           Text(
@@ -1378,7 +1346,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 return ChoiceChip(
                   label: Text(tag, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : textSecondary)),
                   selected: isSelected,
-                  selectedColor: const Color(0xFF10B981),
+                  selectedColor: const Color(0xFF1D4ED8),
                   backgroundColor: cardColor,
                   onSelected: (val) {
                     setState(() => _selectedMediaFilter = val ? tag : null);
@@ -1417,7 +1385,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             icon: Icons.lock_rounded,
             title: 'Locked chats',
             count: _lockedConversations.length,
-            color: const Color(0xFF10B981),
+            color: const Color(0xFF1D4ED8),
             onTap: _openLockedScreen,
           ),
         if (_archivedConversations.isNotEmpty)
@@ -1425,7 +1393,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             icon: Icons.archive_outlined,
             title: 'Archived',
             count: _archivedConversations.length,
-            color: const Color(0xFF10B981),
+            color: const Color(0xFF1D4ED8),
             onTap: _openArchivedScreen,
           ),
 
@@ -1436,12 +1404,12 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                   child: SizedBox(
                     width: 28,
                     height: 28,
-                    child: CircularProgressIndicator(color: Color(0xFF10B981), strokeWidth: 2.5),
+                    child: CircularProgressIndicator(color: Color(0xFF1D4ED8), strokeWidth: 2.5),
                   ),
                 )
               : RefreshIndicator(
                   onRefresh: _loadConversations,
-                  color: const Color(0xFF10B981),
+                  color: const Color(0xFF1D4ED8),
                   child: filteredList.isEmpty
                       ? ListView(
                           children: [
@@ -1470,7 +1438,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                 alignment: Alignment.centerLeft,
                                 padding: const EdgeInsets.symmetric(horizontal: 20),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981),
+                                  color: const Color(0xFF1D4ED8),
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Icon(
@@ -1533,14 +1501,14 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
                                       color: isSelected
-                                          ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                          ? const Color(0xFF1D4ED8).withValues(alpha: 0.15)
                                           : (unread > 0 ? cardColor : cardColor.withValues(alpha: isDark ? 0.6 : 0.9)),
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
                                         color: isSelected
-                                            ? const Color(0xFF10B981)
+                                            ? const Color(0xFF1D4ED8)
                                             : (unread > 0
-                                                ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                                                ? const Color(0xFF1D4ED8).withValues(alpha: 0.3)
                                                 : borderColor),
                                       ),
                                     ),
@@ -1566,7 +1534,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                                     width: 12,
                                                     height: 12,
                                                     decoration: BoxDecoration(
-                                                      color: const Color(0xFF10B981),
+                                                      color: const Color(0xFF1D4ED8),
                                                       shape: BoxShape.circle,
                                                       border: Border.all(color: cardColor, width: 2),
                                                     ),
@@ -1579,7 +1547,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                                   child: Container(
                                                     padding: const EdgeInsets.all(2),
                                                     decoration: BoxDecoration(
-                                                      color: const Color(0xFF10B981),
+                                                      color: const Color(0xFF1D4ED8),
                                                       shape: BoxShape.circle,
                                                       border: Border.all(color: cardColor, width: 1.5),
                                                     ),
@@ -1617,12 +1585,12 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                                       if (isPinned)
                                                         const Padding(
                                                           padding: EdgeInsets.only(right: 4),
-                                                          child: Icon(Icons.push_pin_rounded, size: 13, color: Color(0xFF10B981)),
+                                                          child: Icon(Icons.push_pin_rounded, size: 13, color: Color(0xFF1D4ED8)),
                                                         ),
                                                       Text(
                                                         conv['time'] ?? '',
                                                         style: TextStyle(
-                                                          color: unread > 0 ? const Color(0xFF10B981) : AppTheme.textMuted,
+                                                          color: unread > 0 ? const Color(0xFF1D4ED8) : AppTheme.textMuted,
                                                           fontSize: 11,
                                                           fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400,
                                                         ),
@@ -1669,7 +1637,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                                         Container(
                                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                           decoration: BoxDecoration(
-                                                            color: const Color(0xFF10B981),
+                                                            color: const Color(0xFF1D4ED8),
                                                             borderRadius: BorderRadius.circular(10),
                                                           ),
                                                           child: Text(
@@ -1765,7 +1733,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 child: Container(
                   padding: const EdgeInsets.all(2),
                   decoration: const BoxDecoration(
-                    color: Color(0xFF10B981),
+                    color: Color(0xFF1D4ED8),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.add, size: 14, color: Colors.white),
@@ -1779,7 +1747,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             style: TextStyle(color: textSecondary, fontSize: 12.5),
           ),
           trailing: IconButton(
-            icon: const Icon(Icons.edit_rounded, color: Color(0xFF10B981)),
+            icon: const Icon(Icons.edit_rounded, color: Color(0xFF1D4ED8)),
             tooltip: 'Type text status',
             onPressed: _openTextStatusCreator,
           ),
@@ -1810,7 +1778,32 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
         ),
         const SizedBox(height: 8),
 
-        ..._contactStatuses.map((status) {
+        if (_contactStatuses.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.auto_awesome_outlined, size: 30, color: textSecondary),
+                const SizedBox(height: 8),
+                Text(
+                  'No recent updates yet',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, color: textPrimary),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Contact status updates will appear here.',
+                  style: TextStyle(fontSize: 12, color: textSecondary),
+                ),
+              ],
+            ),
+          )
+        else
+          ..._contactStatuses.map((status) {
           final bool viewed = status['viewed'] == true;
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
@@ -1827,7 +1820,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: viewed ? AppTheme.textMuted : const Color(0xFF10B981),
+                      color: viewed ? AppTheme.textMuted : const Color(0xFF1D4ED8),
                       width: 2.2,
                     ),
                   ),
@@ -1878,8 +1871,8 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             leading: CircleAvatar(
-              backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.15),
-              child: const Icon(Icons.link_rounded, color: Color(0xFF10B981)),
+              backgroundColor: const Color(0xFF1D4ED8).withValues(alpha: 0.15),
+              child: const Icon(Icons.link_rounded, color: Color(0xFF1D4ED8)),
             ),
             title: Text('Create call link', style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary)),
             subtitle: Text('Share a link for your Connekt call', style: TextStyle(color: textSecondary, fontSize: 12)),
@@ -1903,12 +1896,12 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1D4ED8)),
                     )
-                  : const Icon(Icons.sync_rounded, size: 16, color: Color(0xFF10B981)),
+                  : const Icon(Icons.sync_rounded, size: 16, color: Color(0xFF1D4ED8)),
               label: Text(
                 _isSyncingCalls ? 'Syncing...' : 'Sync Logs',
-                style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(color: Color(0xFF1D4ED8), fontSize: 12, fontWeight: FontWeight.w600),
               ),
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
@@ -1922,7 +1915,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
         CallLogFilterBar(
           selectedFilter: _selectedCallFilter,
           onSelected: (f) => setState(() => _selectedCallFilter = f),
-          activeColor: const Color(0xFF10B981),
+          activeColor: const Color(0xFF1D4ED8),
           isDark: isDark,
         ),
         const SizedBox(height: 10),
@@ -1940,7 +1933,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 Icon(
                   permissionDenied ? Icons.perm_phone_msg_rounded : Icons.call_rounded,
                   size: 36,
-                  color: const Color(0xFF10B981),
+                  color: const Color(0xFF1D4ED8),
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -1960,10 +1953,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: _isSyncingCalls ? null : _syncCallLogsNow,
-                  icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF10B981)),
+                  icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF1D4ED8)),
                   label: const Text(
                     'Sync Phone Call Logs',
-                    style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                    style: TextStyle(color: Color(0xFF1D4ED8), fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -1982,64 +1975,6 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             );
           }),
       ],
-    );
-  }
-
-  // ====================================================================
-  // TAB 3: COMMUNITIES TAB
-  // ====================================================================
-
-  Widget _buildCommunitiesTab(
-    BuildContext context,
-    bool isDark,
-    Color cardColor,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        child: Column(
-          children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.groups_rounded, size: 48, color: Color(0xFF10B981)),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Stay connected with a Community',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Communities bring members together in topic-based groups, and make it easy to get admin announcements.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: textSecondary, height: 1.4),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.add_rounded, color: Colors.white),
-              label: const Text('Start your Community', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Community creation wizard coming up!')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -2130,10 +2065,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF10B981) : cardColor,
+          color: isSelected ? const Color(0xFF1D4ED8) : cardColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF10B981) : (isDark ? Colors.white10 : Colors.black12),
+            color: isSelected ? const Color(0xFF1D4ED8) : (isDark ? Colors.white10 : Colors.black12),
           ),
         ),
         child: Text(
@@ -2156,7 +2091,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     if (_tabController.index == 0) {
       // Chats FAB
       return FloatingActionButton(
-        backgroundColor: const Color(0xFF10B981),
+        backgroundColor: const Color(0xFF1D4ED8),
         onPressed: () => _showNewChatSheet(context),
         child: const Icon(Icons.chat_outlined, color: Colors.white),
       );
@@ -2169,12 +2104,12 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             heroTag: 'text_status_fab',
             backgroundColor: AppTheme.getCardColor(context),
             onPressed: _openTextStatusCreator,
-            child: const Icon(Icons.edit_rounded, color: Color(0xFF10B981), size: 18),
+            child: const Icon(Icons.edit_rounded, color: Color(0xFF1D4ED8), size: 18),
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
             heroTag: 'camera_status_fab',
-            backgroundColor: const Color(0xFF10B981),
+            backgroundColor: const Color(0xFF1D4ED8),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Camera status capture initiated')),
@@ -2187,7 +2122,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     } else if (_tabController.index == 2) {
       // Calls FAB
       return FloatingActionButton(
-        backgroundColor: const Color(0xFF10B981),
+        backgroundColor: const Color(0xFF1D4ED8),
         onPressed: () => _showNewChatSheet(context),
         child: const Icon(Icons.add_call, color: Colors.white),
       );

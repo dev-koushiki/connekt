@@ -82,7 +82,7 @@ class CallLogTile extends StatelessWidget {
     required this.borderColor,
     required this.textPrimary,
     required this.textSecondary,
-    this.actionColor = const Color(0xFF10B981),
+    this.actionColor = const Color(0xFF1D4ED8),
     required this.onCallTap,
   });
 
