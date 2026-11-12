@@ -137,6 +137,42 @@ class AuthManager {
     if (panel) panel.style.display = 'block';
   }
 
+  /** Clear auth inputs, OTP state, and validation badges back to the Sign In tab. */
+  resetForms() {
+    if (this.otpTimer) {
+      clearInterval(this.otpTimer);
+      this.otpTimer = null;
+    }
+    this.currentOtpPhone = '';
+
+    ['loginForm', 'registerForm', 'forgotPasswordForm'].forEach((id) => {
+      document.getElementById(id)?.reset();
+    });
+
+    document.querySelectorAll('.otp-digit').forEach((input) => {
+      input.value = '';
+    });
+
+    const regOtp = document.getElementById('regOtpContainer');
+    if (regOtp) regOtp.style.display = 'none';
+
+    const forgotOtp = document.getElementById('forgotOtpStep');
+    if (forgotOtp) forgotOtp.style.display = 'none';
+
+    ['usernameStatus', 'phoneStatus'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = '';
+        el.className = 'input-feedback';
+      }
+    });
+
+    const mailPreview = document.getElementById('connektMailPreview');
+    if (mailPreview) mailPreview.textContent = 'yourname@connekt.me';
+
+    this.switchAuthTab('login');
+  }
+
   async checkUsernameDebounced(username) {
     const statusEl = document.getElementById('usernameStatus');
     if (!statusEl) return;

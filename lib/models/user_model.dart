@@ -75,6 +75,37 @@ class UserModel {
       if (privacySettings != null) 'privacySettings': privacySettings!.toJson(),
     };
   }
+
+  /// Return a copy of this user with updated fields.
+  UserModel copyWith({
+    String? id,
+    String? phone,
+    String? username,
+    String? email,
+    String? currentMode,
+    String? role,
+    PersonalProfile? personalProfile,
+    ProfessionalProfile? professionalProfile,
+    List<SkillModel>? skills,
+    List<ExperienceModel>? experience,
+    List<EducationModel>? education,
+    PrivacySettingsModel? privacySettings,
+  }) {
+    return UserModel(
+      id: id ?? this.id,
+      phone: phone ?? this.phone,
+      username: username ?? this.username,
+      email: email ?? this.email,
+      currentMode: currentMode ?? this.currentMode,
+      role: role ?? this.role,
+      personalProfile: personalProfile ?? this.personalProfile,
+      professionalProfile: professionalProfile ?? this.professionalProfile,
+      skills: skills ?? this.skills,
+      experience: experience ?? this.experience,
+      education: education ?? this.education,
+      privacySettings: privacySettings ?? this.privacySettings,
+    );
+  }
 }
 
 class PersonalProfile {
@@ -114,6 +145,25 @@ class PersonalProfile {
       'location': location,
       'website': website,
     };
+  }
+
+  /// Return a copy of this personal profile with updated fields.
+  PersonalProfile copyWith({
+    String? fullName,
+    String? displayName,
+    String? avatarUrl,
+    String? bio,
+    String? location,
+    String? website,
+  }) {
+    return PersonalProfile(
+      fullName: fullName ?? this.fullName,
+      displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      bio: bio ?? this.bio,
+      location: location ?? this.location,
+      website: website ?? this.website,
+    );
   }
 }
 

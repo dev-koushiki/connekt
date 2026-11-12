@@ -196,7 +196,17 @@ class UserModel {
       `UPDATE user_profiles SET avatar_url = $1, updated_at = NOW() WHERE user_id = $2 RETURNING avatar_url`,
       [avatarUrl, userId]
     );
-    return res.rows[0] || null;
+    if (res.rows.length > 0) {
+      return res.rows[0];
+    }
+    const insertRes = await db.query(
+      `INSERT INTO user_profiles (user_id, avatar_url)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE SET avatar_url = EXCLUDED.avatar_url, updated_at = NOW()
+       RETURNING avatar_url`,
+      [userId, avatarUrl]
+    );
+    return insertRes.rows[0] || null;
   }
 
   static async updateProfessionalProfile(userId, { headline, currentCompany, industry, summary, yearsOfExperience, portfolioUrl, githubUrl, linkedinUrl, resumeUrl, isOpenToWork, isHiring }) {

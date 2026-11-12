@@ -8,6 +8,8 @@ class AppController {
     this.currentUser = null;
     this.activeModule = 'home';
     this.activeMode = 'common'; // 'common' | 'professional' | 'both'
+    this.globalSocket = null;
+    this._isLoggingOut = false;
   }
 
   async init() {
@@ -15,9 +17,9 @@ class AppController {
     this.setupGlobalListeners();
     window.authManager.init();
 
-    // Support URL Hash Navigation (e.g. #meetings, #home, #profile)
+    // Support URL Hash Navigation (e.g. #meetings, #call_logs, #home, #profile)
     const initialHash = window.location.hash.replace('#', '');
-    if (initialHash && ['home', 'meetings', 'profile', 'settings', 'messages', 'communities', 'mail'].includes(initialHash)) {
+    if (initialHash && ['home', 'meetings', 'call_logs', 'profile', 'settings', 'messages', 'communities', 'mail'].includes(initialHash)) {
       this.activeModule = initialHash;
     } else if (initialHash.startsWith('meet/')) {
       this.activeModule = 'meetings';
@@ -45,6 +47,8 @@ class AppController {
     const token = window.api.getToken();
     if (token) {
       await this.loadUserProfile();
+      this.initGlobalSocket();
+      this.triggerCallLogsSync();
     } else {
       this.showAuthModal(true);
     }
@@ -57,13 +61,15 @@ class AppController {
       this.showAuthModal(false);
       this.applyUserSession();
       this.renderCurrentView();
+      this.initGlobalSocket();
+      this.triggerCallLogsSync();
     });
 
     // Auth expired event
     window.addEventListener('auth:expired', () => {
-      this.currentUser = null;
+      if (this._isLoggingOut) return;
+      this._resetClientSessionUI();
       this.showToast('Your session has expired. Please sign in again.', 'warning');
-      this.showAuthModal(true);
     });
 
     // Mobile menu toggle
@@ -222,10 +228,11 @@ class AppController {
     const modeBadge = document.getElementById('activeModeBadge');
 
     const displayName = user.personalProfile?.display_name || user.personalProfile?.full_name || user.username;
-    const avatarUrl = user.personalProfile?.avatar_url || '/assets/images/default-avatar.png';
+    const fallbackAvatar = '/assets/images/default-avatar.png';
+    const avatarUrl = user.personalProfile?.avatar_url || fallbackAvatar;
 
-    if (avatar) avatar.src = avatarUrl;
-    if (topAvatar) topAvatar.src = avatarUrl;
+    this._setImgWithFallback(avatar, avatarUrl, fallbackAvatar);
+    this._setImgWithFallback(topAvatar, avatarUrl, fallbackAvatar);
     if (name) name.textContent = displayName;
     if (handle) handle.textContent = `@${user.username}`;
     if (modeBadge) {
@@ -277,6 +284,11 @@ class AppController {
         this.renderHomeView(mainContent);
         break;
       case 'meetings':
+        this.meetingsMainTab = 'meetings';
+        this.renderMeetingsDashboard(mainContent);
+        break;
+      case 'call_logs':
+        this.meetingsMainTab = 'call_logs';
         this.renderMeetingsDashboard(mainContent);
         break;
       case 'profile':
@@ -397,6 +409,26 @@ class AppController {
               <span>→</span>
             </div>
           </div>
+
+          <!-- Card 4: Phone Call Logs -->
+          <div class="card card-glow" style="cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border-left: 3px solid #10b981; transition: all 0.2s ease;" onclick="window.app.navigateTo('call_logs')">
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                  📞
+                </div>
+                <span class="badge badge-success">Phone Sync</span>
+              </div>
+              <h3 style="font-size: 1.15rem; margin-bottom: 6px;">Call Logs</h3>
+              <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4;">
+                View incoming, outgoing, and missed phone call history synced from your mobile device.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 0.85rem; color: #34d399; font-weight: 600;">
+              <span>Open Call Logs</span>
+              <span>→</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -432,7 +464,7 @@ class AppController {
             <button class="btn btn-secondary btn-sm" onclick="window.app.navigateTo('profile')">Manage</button>
           </h3>
           <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px;">
-            <img src="${user.personalProfile?.avatar_url || '/assets/images/default-avatar.png'}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-primary);" />
+            <img src="${user.personalProfile?.avatar_url || '/assets/images/default-avatar.png'}" onerror="this.onerror=null;this.src='/assets/images/default-avatar.png';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-primary);" />
             <div>
               <div style="font-weight: 700; font-size: 1.1rem;">${user.personalProfile?.full_name || user.username}</div>
               <div style="color: var(--text-muted); font-size: 0.85rem;">${user.personalProfile?.bio || 'No personal bio added yet.'}</div>
@@ -481,7 +513,7 @@ class AppController {
       <div id="tab-personal" class="profile-tab-content">
         <div class="card">
           <div class="avatar-upload-wrapper">
-            <img id="profileAvatarPreview" src="${personal.avatar_url || '/assets/images/default-avatar.png'}" class="avatar-preview-lg" />
+            <img id="profileAvatarPreview" src="${personal.avatar_url || '/assets/images/default-avatar.png'}" onerror="this.onerror=null;this.src='/assets/images/default-avatar.png';" title="Click to change profile photo" onclick="document.getElementById('avatarFileInput')?.click()" class="avatar-preview-lg" />
             <div>
               <h4 style="margin-bottom: 4px;">Profile Photo</h4>
               <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">JPG, PNG, or WEBP up to 5MB.</p>
@@ -819,9 +851,33 @@ class AppController {
     }
   }
 
+  _setImgWithFallback(imgEl, url, fallback = '/assets/images/default-avatar.png') {
+    if (!imgEl) return;
+    imgEl.onerror = () => {
+      imgEl.onerror = null;
+      imgEl.src = fallback;
+    };
+    imgEl.src = url || fallback;
+  }
+
   async handleAvatarUpload(e) {
-    const file = e.target.files[0];
+    const input = e.target;
+    const file = input?.files?.[0];
     if (!file) return;
+
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      this.showToast('Profile photo must be 5MB or smaller.', 'error');
+      input.value = '';
+      return;
+    }
+
+    const allowedExt = /\.(jpe?g|png|webp|gif|heic|heif)$/i;
+    if (file.type && !file.type.startsWith('image/') && !allowedExt.test(file.name)) {
+      this.showToast('Please select a valid image file (JPG, PNG, WEBP, or GIF).', 'error');
+      input.value = '';
+      return;
+    }
 
     const formData = new FormData();
     formData.append('avatar', file);
@@ -829,14 +885,25 @@ class AppController {
     try {
       this.showLoading(true);
       const res = await window.api.user.uploadAvatar(formData);
-      this.currentUser.personalProfile.avatar_url = res.data.avatarUrl;
+      const newAvatarUrl = res?.data?.avatarUrl;
+      if (this.currentUser) {
+        if (res?.data?.user) {
+          this.currentUser = res.data.user;
+        } else {
+          this.currentUser.personalProfile = {
+            ...(this.currentUser.personalProfile || {}),
+            avatar_url: newAvatarUrl
+          };
+        }
+        window.api.setUser(this.currentUser);
+      }
       this.showToast('Avatar updated successfully!', 'success');
       this.applyUserSession();
-      const preview = document.getElementById('profileAvatarPreview');
-      if (preview) preview.src = res.data.avatarUrl;
+      this._setImgWithFallback(document.getElementById('profileAvatarPreview'), newAvatarUrl);
     } catch (err) {
-      this.showToast(err.message, 'error');
+      this.showToast(err.message || 'Failed to upload avatar.', 'error');
     } finally {
+      if (input) input.value = '';
       this.showLoading(false);
     }
   }
@@ -1126,18 +1193,91 @@ class AppController {
     }
   }
 
+  _resetClientSessionUI() {
+    window.api.removeToken();
+    this.currentUser = null;
+    this.activeModule = 'home';
+    this.activeMode = 'common';
+
+    try {
+      const overlayEl = document.getElementById('meetingRoomOverlay');
+      if (window.meetingRoom && typeof window.meetingRoom.leaveRoom === 'function' && overlayEl && overlayEl.style.display !== 'none') {
+        window.meetingRoom.leaveRoom(false);
+      }
+      if (overlayEl) overlayEl.style.display = 'none';
+    } catch (_) {}
+
+    try {
+      if (this.globalSocket) {
+        this.globalSocket.disconnect();
+        this.globalSocket = null;
+      }
+    } catch (_) {}
+
+    try {
+      if (window.chatManager && typeof window.chatManager.disconnect === 'function') {
+        window.chatManager.disconnect();
+      }
+    } catch (_) {}
+
+    ['instantMeetingModal', 'joinedMeetingModal', 'scheduleMeetingModal', 'meetingRecordsModal'].forEach((id) => {
+      document.getElementById(id)?.remove();
+    });
+    document.getElementById('appSidebar')?.classList.remove('mobile-open');
+    document.getElementById('mobileOverlay')?.classList.remove('active');
+
+    const mainContent = document.getElementById('mainContentArea');
+    if (mainContent) mainContent.innerHTML = '';
+
+    const defaultAvatar = '/assets/images/default-avatar.png';
+    this._setImgWithFallback(document.getElementById('sidebarAvatar'), defaultAvatar, defaultAvatar);
+    this._setImgWithFallback(document.getElementById('topbarAvatar'), defaultAvatar, defaultAvatar);
+
+    const sidebarName = document.getElementById('sidebarName');
+    const sidebarHandle = document.getElementById('sidebarHandle');
+    const modeBadge = document.getElementById('activeModeBadge');
+    if (sidebarName) sidebarName.textContent = 'Guest User';
+    if (sidebarHandle) sidebarHandle.textContent = '@connekt';
+    if (modeBadge) {
+      modeBadge.textContent = 'COMMON MODE';
+      modeBadge.className = 'badge badge-mode badge-success';
+    }
+
+    document.querySelectorAll('.nav-item[data-module]').forEach((item) => {
+      item.classList.toggle('active', item.dataset.module === 'home');
+    });
+
+    if (window.location.hash) {
+      try {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      } catch (_) {
+        window.location.hash = '';
+      }
+    }
+
+    window.authManager?.resetForms?.();
+    this.showAuthModal(true);
+  }
+
   async handleLogout() {
+    if (this._isLoggingOut) return;
+    this._isLoggingOut = true;
+    const logoutBtn = document.getElementById('btnLogout');
+    if (logoutBtn) logoutBtn.disabled = true;
+
     try {
       this.showLoading(true);
-      await window.api.auth.logout();
-    } catch (e) {
-      // ignore
+      if (window.api.getToken()) {
+        await window.api.auth.logout();
+      }
+    } catch (_) {
+      // Proceed with local sign-out even if server revoke fails or times out
     } finally {
-      window.api.removeToken();
-      this.currentUser = null;
+      this._resetClientSessionUI();
       this.showLoading(false);
+      if (logoutBtn) logoutBtn.disabled = false;
+      this._isLoggingOut = false;
       this.showToast('Logged out safely.', 'info');
-      this.showAuthModal(true);
     }
   }
 
@@ -1148,6 +1288,9 @@ class AppController {
   async renderMeetingsDashboard(container) {
     this.meetingsFilter = 'all';
     this.meetingsSearch = '';
+    this.meetingsMainTab = this.meetingsMainTab || 'meetings';
+    this.callLogsFilter = 'all';
+    this.callLogsSearch = '';
 
     container.innerHTML = `
       <!-- Meetings Top Header -->
@@ -1156,96 +1299,163 @@ class AppController {
           <button class="btn btn-secondary btn-sm" style="margin-bottom: 8px; display: inline-flex; align-items: center; gap: 6px;" onclick="window.app.navigateTo('home')">
             ← Back to Dashboard
           </button>
-          <h2>CONNEKT Meetings & Collaboration</h2>
+          <h2>CONNEKT Meetings & Calls</h2>
           <p style="color: var(--text-muted); font-size: 0.9rem;">
-            Instant rooms, scheduled video conferences, and attendance tracking.
+            Instant video conference rooms, calendar schedules, and live phone contacts call history.
           </p>
         </div>
 
         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-          <div class="meetings-search-bar">
+          <button class="btn btn-primary btn-sm" onclick="window.app.openScheduleMeetingModal()">+ Schedule Meeting</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.app.meetingsMainTab === 'call_logs' ? window.app.loadCallLogsList() : window.app.loadMeetingsList()">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Main Navigation Tabs: Video Meetings vs Phone Call Logs -->
+      <div class="tabs-container" style="margin-bottom: 24px; border-bottom: 1px solid var(--border-subtle);">
+        <button class="tab-btn ${this.meetingsMainTab === 'meetings' ? 'active' : ''}" data-main-meetings-tab="meetings" onclick="window.app.switchMeetingsMainTab('meetings')">
+          📹 Video Meetings & Conferences
+        </button>
+        <button class="tab-btn ${this.meetingsMainTab === 'call_logs' ? 'active' : ''}" data-main-meetings-tab="call_logs" onclick="window.app.switchMeetingsMainTab('call_logs')">
+          📱 Phone Contacts & Call History (Synced with Phone)
+        </button>
+      </div>
+
+      <!-- SECTION 1: VIDEO CONFERENCES & ROOMS -->
+      <div id="meetingsSectionContainer" style="${this.meetingsMainTab === 'meetings' ? 'display: block;' : 'display: none;'}">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+          <div class="meetings-search-bar" style="flex: 1; max-width: 450px;">
             <span>🔍</span>
             <input type="text" id="meetingsSearchInput" class="meetings-search-input" placeholder="Search meetings by title, room code, or agenda..." />
           </div>
-          <button class="btn btn-primary btn-sm" onclick="window.app.openScheduleMeetingModal()">+ Schedule Meeting</button>
-          <button class="btn btn-secondary btn-sm" onclick="window.app.loadMeetingsList()">↻ Refresh</button>
         </div>
-      </div>
 
-      <!-- Main Action Section (3 Primary Cards) -->
-      <div class="meeting-actions-grid">
-        <!-- Card 1: Start Instant Meeting -->
-        <div class="meeting-action-card primary">
-          <div>
-            <div class="meeting-action-card-icon">⚡</div>
-            <h3 style="margin-bottom: 8px;">Start Instant Meeting</h3>
-            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 20px;">
-              Create an instant meeting room immediately. Generates a unique room code (<code style="color: var(--accent-cyan);">abc-defg-hij</code>) and assigns you as host.
-            </p>
+        <!-- Main Action Section (3 Primary Cards) -->
+        <div class="meeting-actions-grid">
+          <!-- Card 1: Start Instant Meeting -->
+          <div class="meeting-action-card primary">
+            <div>
+              <div class="meeting-action-card-icon">⚡</div>
+              <h3 style="margin-bottom: 8px;">Start Instant Meeting</h3>
+              <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 20px;">
+                Create an instant meeting room immediately. Generates a unique room code (<code style="color: var(--accent-cyan);">abc-defg-hij</code>) and assigns you as host.
+              </p>
+            </div>
+            <button class="btn btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="window.app.handleCreateInstantMeeting()">
+              <span>Start Meeting Now</span>
+              <span>📹</span>
+            </button>
           </div>
-          <button class="btn btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="window.app.handleCreateInstantMeeting()">
-            <span>Start Meeting Now</span>
-            <span>📹</span>
-          </button>
+
+          <!-- Card 2: Join a Meeting -->
+          <div class="meeting-action-card accent">
+            <div>
+              <div class="meeting-action-card-icon">🔗</div>
+              <h3 style="margin-bottom: 8px;">Join a Meeting</h3>
+              <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 14px;">
+                Enter a meeting room code or link to enter an active session.
+              </p>
+              <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+                <input type="text" id="joinRoomCodeInput" class="form-control" placeholder="Room code (e.g. abc-defg-hij)" style="font-family: monospace; font-size: 0.95rem; text-transform: lowercase;" />
+                <input type="password" id="joinRoomPasscodeInput" class="form-control" placeholder="Passcode (optional if requested)" style="font-size: 0.88rem;" />
+              </div>
+            </div>
+            <button class="btn btn-secondary" style="width: 100%; border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="window.app.handleJoinMeetingFromInput()">
+              Join Meeting Room →
+            </button>
+          </div>
+
+          <!-- Card 3: Schedule a Meeting -->
+          <div class="meeting-action-card purple">
+            <div>
+              <div class="meeting-action-card-icon">📅</div>
+              <h3 style="margin-bottom: 8px;">Schedule a Meeting</h3>
+              <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 20px;">
+                Plan a future video conference with custom date, time, duration, agenda, and invite registered CONNEKT contacts.
+              </p>
+            </div>
+            <button class="btn btn-secondary" style="width: 100%;" onclick="window.app.openScheduleMeetingModal()">
+              Schedule New Meeting 📅
+            </button>
+          </div>
         </div>
 
-        <!-- Card 2: Join a Meeting -->
-        <div class="meeting-action-card accent">
-          <div>
-            <div class="meeting-action-card-icon">🔗</div>
-            <h3 style="margin-bottom: 8px;">Join a Meeting</h3>
-            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 14px;">
-              Enter a meeting room code or link to enter an active session.
-            </p>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-              <input type="text" id="joinRoomCodeInput" class="form-control" placeholder="Room code (e.g. abc-defg-hij)" style="font-family: monospace; font-size: 0.95rem; text-transform: lowercase;" />
-              <input type="password" id="joinRoomPasscodeInput" class="form-control" placeholder="Passcode (optional if requested)" style="font-size: 0.88rem;" />
+        <!-- Meeting Overview Section -->
+        <div style="margin-top: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+            <h3 style="display: flex; align-items: center; gap: 10px;">
+              <span>Meeting Overview</span>
+              <span id="meetingsTotalCountBadge" class="badge badge-primary">0 Total</span>
+            </h3>
+
+            <!-- Filter Tabs -->
+            <div class="tabs-container" style="margin-bottom: 0;">
+              <button class="tab-btn active" data-meetings-tab="all" onclick="window.app.switchMeetingsFilter('all')">All Meetings</button>
+              <button class="tab-btn" data-meetings-tab="upcoming" onclick="window.app.switchMeetingsFilter('upcoming')">Upcoming</button>
+              <button class="tab-btn" data-meetings-tab="today" onclick="window.app.switchMeetingsFilter('today')">Today</button>
+              <button class="tab-btn" data-meetings-tab="created_by_me" onclick="window.app.switchMeetingsFilter('created_by_me')">Created by Me</button>
+              <button class="tab-btn" data-meetings-tab="invited_to" onclick="window.app.switchMeetingsFilter('invited_to')">Invited to</button>
+              <button class="tab-btn" data-meetings-tab="past" onclick="window.app.switchMeetingsFilter('past')">Past History</button>
             </div>
           </div>
-          <button class="btn btn-secondary" style="width: 100%; border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="window.app.handleJoinMeetingFromInput()">
-            Join Meeting Room →
-          </button>
-        </div>
 
-        <!-- Card 3: Schedule a Meeting -->
-        <div class="meeting-action-card purple">
-          <div>
-            <div class="meeting-action-card-icon">📅</div>
-            <h3 style="margin-bottom: 8px;">Schedule a Meeting</h3>
-            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 20px;">
-              Plan a future video conference with custom date, time, duration, agenda, and invite registered CONNEKT contacts.
-            </p>
+          <!-- Dynamic Meeting Records Container -->
+          <div id="meetingsListContainer">
+            <div style="text-align: center; padding: 36px; color: var(--text-muted);">
+              <div style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;"></div>
+              Loading meetings from database...
+            </div>
           </div>
-          <button class="btn btn-secondary" style="width: 100%;" onclick="window.app.openScheduleMeetingModal()">
-            Schedule New Meeting 📅
-          </button>
         </div>
       </div>
 
-      <!-- Meeting Overview Section -->
-      <div style="margin-top: 12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-          <h3 style="display: flex; align-items: center; gap: 10px;">
-            <span>Meeting Overview</span>
-            <span id="meetingsTotalCountBadge" class="badge badge-primary">0 Total</span>
-          </h3>
-
-          <!-- Filter Tabs -->
-          <div class="tabs-container" style="margin-bottom: 0;">
-            <button class="tab-btn active" data-meetings-tab="all" onclick="window.app.switchMeetingsFilter('all')">All Meetings</button>
-            <button class="tab-btn" data-meetings-tab="upcoming" onclick="window.app.switchMeetingsFilter('upcoming')">Upcoming</button>
-            <button class="tab-btn" data-meetings-tab="today" onclick="window.app.switchMeetingsFilter('today')">Today</button>
-            <button class="tab-btn" data-meetings-tab="created_by_me" onclick="window.app.switchMeetingsFilter('created_by_me')">Created by Me</button>
-            <button class="tab-btn" data-meetings-tab="invited_to" onclick="window.app.switchMeetingsFilter('invited_to')">Invited to</button>
-            <button class="tab-btn" data-meetings-tab="past" onclick="window.app.switchMeetingsFilter('past')">Past History</button>
+      <!-- SECTION 2: PHONE CONTACTS & CALL HISTORY (SYNCED WITH ANDROID PHONE) -->
+      <div id="callsSectionContainer" style="${this.meetingsMainTab === 'call_logs' ? 'display: block;' : 'display: none;'}">
+        <!-- Live Sync Status Banner -->
+        <div style="background: var(--bg-card); border-radius: var(--radius-md); padding: 18px; border: 1px solid var(--border-subtle); margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                📱
+              </div>
+              <div>
+                <h3 style="margin-bottom: 2px;">Phone Contacts & Call Logs</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
+                  Automatically fetched from your Android phone contacts and call logs upon website login.
+                </p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span id="callSyncStatusBadge" class="badge badge-success" style="padding: 6px 12px; font-size: 0.8rem;">
+                🟢 Phone Connected & Synced
+              </span>
+              <button id="btnManualCallSync" class="btn btn-secondary btn-sm" onclick="window.app.triggerCallLogsSync(true)">
+                🔄 Sync from Phone
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Dynamic Meeting Records Container -->
-        <div id="meetingsListContainer">
+        <!-- Filter & Search Toolbar -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+          <div class="tabs-container" style="margin-bottom: 0;">
+            <button class="tab-btn active" data-call-tab="all" onclick="window.app.switchCallLogsFilter('all')">All Calls</button>
+            <button class="tab-btn" data-call-tab="incoming" onclick="window.app.switchCallLogsFilter('incoming')">Incoming ↙️</button>
+            <button class="tab-btn" data-call-tab="outgoing" onclick="window.app.switchCallLogsFilter('outgoing')">Outgoing ↗️</button>
+            <button class="tab-btn" data-call-tab="missed" onclick="window.app.switchCallLogsFilter('missed')">Missed ❌</button>
+            <button class="tab-btn" data-call-tab="rejected" onclick="window.app.switchCallLogsFilter('rejected')">Rejected 🚫</button>
+          </div>
+          <div class="meetings-search-bar" style="max-width: 320px;">
+            <span>🔍</span>
+            <input type="text" id="callLogsSearchInput" class="meetings-search-input" placeholder="Search contact name or number..." />
+          </div>
+        </div>
+
+        <!-- Dynamic Call Logs Container -->
+        <div id="callLogsListContainer">
           <div style="text-align: center; padding: 36px; color: var(--text-muted);">
             <div style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;"></div>
-            Loading meetings from database...
+            Loading phone call logs...
           </div>
         </div>
       </div>
@@ -1254,7 +1464,7 @@ class AppController {
       <div id="meetingsModalContainer"></div>
     `;
 
-    // Hook search input with debounce
+    // Hook meetings search input with debounce
     let searchTimeout = null;
     const searchInput = document.getElementById('meetingsSearchInput');
     if (searchInput) {
@@ -1267,8 +1477,207 @@ class AppController {
       });
     }
 
-    // Load initial meetings list
-    await this.loadMeetingsList();
+    // Hook call logs search input with debounce
+    let callSearchTimeout = null;
+    const callSearchInput = document.getElementById('callLogsSearchInput');
+    if (callSearchInput) {
+      callSearchInput.addEventListener('input', (e) => {
+        clearTimeout(callSearchTimeout);
+        callSearchTimeout = setTimeout(() => {
+          this.callLogsSearch = e.target.value.trim();
+          this.loadCallLogsList();
+        }, 300);
+      });
+    }
+
+    // Load initial data based on active tab
+    if (this.meetingsMainTab === 'call_logs') {
+      await this.loadCallLogsList();
+    } else {
+      await this.loadMeetingsList();
+    }
+  }
+
+  switchMeetingsMainTab(tab) {
+    this.meetingsMainTab = tab;
+    document.querySelectorAll('[data-main-meetings-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mainMeetingsTab === tab);
+    });
+    const meetingsSection = document.getElementById('meetingsSectionContainer');
+    const callsSection = document.getElementById('callsSectionContainer');
+    if (tab === 'meetings') {
+      if (meetingsSection) meetingsSection.style.display = 'block';
+      if (callsSection) callsSection.style.display = 'none';
+      this.loadMeetingsList();
+    } else {
+      if (meetingsSection) meetingsSection.style.display = 'none';
+      if (callsSection) callsSection.style.display = 'block';
+      this.loadCallLogsList();
+    }
+  }
+
+  switchCallLogsFilter(filter) {
+    this.callLogsFilter = filter;
+    document.querySelectorAll('[data-call-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.callTab === filter);
+    });
+    this.loadCallLogsList();
+  }
+
+  initGlobalSocket() {
+    const token = window.api.getToken();
+    if (!token || typeof io === 'undefined') return;
+    if (this.globalSocket && this.globalSocket.connected) return;
+
+    try {
+      this.globalSocket = io({
+        auth: { token },
+        query: { token }
+      });
+
+      this.globalSocket.on('call-logs:synced', (data) => {
+        this.showToast(`✅ Synced ${data.count} call logs from your phone contacts!`, 'success');
+        if (this.activeModule === 'meetings' && this.meetingsMainTab === 'call_logs') {
+          this.loadCallLogsList();
+        }
+      });
+    } catch (_) {}
+  }
+
+  async triggerCallLogsSync(isManual = false) {
+    try {
+      if (isManual) this.showToast('📱 Requesting fresh call logs from connected phone...', 'info');
+      await window.api.calls.requestSync();
+      if (this.meetingsMainTab === 'call_logs') {
+        setTimeout(() => this.loadCallLogsList(), 1200);
+      }
+    } catch (err) {
+      if (isManual) this.showToast('Could not reach phone: ' + err.message, 'warning');
+    }
+  }
+
+  async loadCallLogsList() {
+    const container = document.getElementById('callLogsListContainer');
+    if (!container) return;
+
+    try {
+      const filter = this.callLogsFilter || 'all';
+      const search = (this.callLogsSearch || '').toLowerCase();
+      const res = await window.api.calls.getDeviceLogs({ type: filter, limit: 100 });
+      let logs = res.data?.logs || [];
+      const totalSynced = res.data?.total ?? logs.length;
+
+      const statusBadge = document.getElementById('callSyncStatusBadge');
+      if (statusBadge) {
+        if (totalSynced > 0) {
+          statusBadge.className = 'badge badge-success';
+          statusBadge.textContent = `🟢 ${totalSynced} Call Log${totalSynced === 1 ? '' : 's'} Synced`;
+        } else {
+          statusBadge.className = 'badge badge-warning';
+          statusBadge.textContent = '🟡 Waiting for Phone Sync';
+        }
+      }
+
+      if (search) {
+        logs = logs.filter(l =>
+          (l.name && l.name.toLowerCase().includes(search)) ||
+          (l.number && l.number.includes(search))
+        );
+      }
+
+      if (logs.length === 0) {
+        container.innerHTML = `
+          <div class="card" style="text-align: center; padding: 48px 20px;">
+            <div style="font-size: 2.8rem; margin-bottom: 12px;">📱</div>
+            <h4 style="margin-bottom: 6px; color: var(--text-primary);">No call logs found</h4>
+            <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 440px; margin: 0 auto 16px;">
+              ${search ? `No call records match "${search}".` : `When you log in to the website, your phone's call logs are synced automatically from your phone contacts. Ensure the CONNEKT app is open on your phone.`}
+            </p>
+            <button class="btn btn-primary btn-sm" onclick="window.app.triggerCallLogsSync(true)">🔄 Sync Call Logs Now</button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = logs.map(l => {
+        const type = (l.type || 'unknown').toLowerCase();
+        let icon = '📞';
+        let badgeClass = 'badge-primary';
+        let typeLabel = 'Call';
+
+        if (type === 'incoming') {
+          icon = '↙️';
+          badgeClass = 'badge-success';
+          typeLabel = 'Incoming';
+        } else if (type === 'outgoing') {
+          icon = '↗️';
+          badgeClass = 'badge-primary';
+          typeLabel = 'Outgoing';
+        } else if (type === 'missed') {
+          icon = '❌';
+          badgeClass = 'badge-danger';
+          typeLabel = 'Missed';
+        } else if (type === 'rejected') {
+          icon = '🚫';
+          badgeClass = 'badge-warning';
+          typeLabel = 'Rejected';
+        }
+
+        const mins = Math.floor((l.duration || 0) / 60);
+        const secs = (l.duration || 0) % 60;
+        const durationStr = l.duration > 0 ? (mins > 0 ? `${mins}m ${secs}s` : `${secs}s`) : (type === 'missed' ? '0s (Missed)' : '0s');
+
+        const date = l.timestamp ? new Date(l.timestamp) : new Date();
+        const formattedDate = date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+
+        const initial = (l.name || l.number || 'C').trim().charAt(0).toUpperCase();
+
+        return `
+          <div class="meeting-card" style="display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 14px; min-width: 0;">
+              <div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(37, 99, 235, 0.15); color: #3b82f6; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; flex-shrink: 0;">
+                ${initial}
+              </div>
+              <div style="min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <h4 style="margin: 0; font-size: 0.98rem; font-weight: 600; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                    ${l.name || l.number}
+                  </h4>
+                  <span class="badge ${badgeClass}" style="font-size: 0.72rem; padding: 2px 7px;">
+                    ${icon} ${typeLabel}
+                  </span>
+                </div>
+                <div style="color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; font-family: monospace;">
+                  ${l.number}
+                </div>
+              </div>
+            </div>
+
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+                ${formattedDate}
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+                ⏱️ ${durationStr}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load call logs:', err);
+      container.innerHTML = `
+        <div class="card" style="text-align: center; color: var(--color-danger); padding: 24px;">
+          Failed to load call logs: ${err.message}
+        </div>
+      `;
+    }
   }
 
   async switchMeetingsFilter(filter) {

@@ -12,6 +12,8 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const meetingRoutes = require('./routes/meetingRoutes');
+const chatRoutes = require('./routes/chatRoutes');
+const callRoutes = require('./routes/callRoutes');
 const { apiLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
@@ -25,18 +27,20 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   }
 });
+app.set('io', io);
 setupSockets(io);
 
 // Security & Middlewares
 app.use(helmet({
   contentSecurityPolicy: false, // Disabled for ease of serving vanilla frontend assets and scripts
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'bypass-tunnel-reminder']
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -74,6 +78,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/chats', chatRoutes);
+app.use('/api/calls', callRoutes);
 
 // Fallback routing for SPA / Pages
 app.use((req, res) => {
@@ -86,6 +92,15 @@ app.use((req, res) => {
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('[Global Error]:', err);
+  if (err && err.name === 'MulterError') {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'Image file is too large. Maximum allowed size is 5MB.'
+      : (err.message || 'Invalid file upload request.');
+    return res.status(400).json({
+      success: false,
+      message
+    });
+  }
   const status = err.statusCode || 500;
   return res.status(status).json({
     success: false,

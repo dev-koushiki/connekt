@@ -284,7 +284,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   TextField(
                     controller: hostController,
                     decoration: InputDecoration(
-                      hintText: '192.168.29.98:5000 or https://...loca.lt',
+                      hintText: '${ApiConfig.defaultHost} or https://...loca.lt',
                       labelText: 'Host or Cloud URL',
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.clear, size: 18),
@@ -358,11 +358,11 @@ class _AuthScreenState extends State<AuthScreen> {
                       ActionChip(
                         avatar: const Icon(Icons.cloud_outlined, size: 14),
                         label: const Text('5G Mobile Data (Cloud Tunnel)', style: TextStyle(fontSize: 11)),
-                        onPressed: () => setDialogState(() => hostController.text = 'https://plain-clouds-take.loca.lt'),
+                        onPressed: () => setDialogState(() => hostController.text = 'https://silver-geckos-warn.loca.lt'),
                       ),
                       ActionChip(
-                        label: const Text('Wi-Fi (192.168.29.98:5000)', style: TextStyle(fontSize: 11)),
-                        onPressed: () => setDialogState(() => hostController.text = '192.168.29.98:5000'),
+                        label: Text('Wi-Fi (${ApiConfig.defaultHost})', style: const TextStyle(fontSize: 11)),
+                        onPressed: () => setDialogState(() => hostController.text = ApiConfig.defaultHost),
                       ),
                       ActionChip(
                         label: const Text('USB (localhost:5000)', style: TextStyle(fontSize: 11)),

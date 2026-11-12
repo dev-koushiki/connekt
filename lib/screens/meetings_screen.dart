@@ -1,9 +1,13 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../config/api_config.dart';
 import '../config/app_theme.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
+import '../services/call_log_service.dart';
+import '../widgets/call_log_tile.dart';
+import '../widgets/safe_avatar.dart';
 import '../widgets/meetings_illustration.dart';
 import 'meeting_call_screen.dart';
 
@@ -29,11 +33,15 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
   // Recent call activity history
   // If empty, displays the empty-state illustration
   final List<Map<String, dynamic>> _recentCalls = [];
+  String _callHistoryFilter = 'All';
+  bool _isSyncingCallLogs = false;
 
   @override
   void initState() {
     super.initState();
+    CallLogService.syncNotifier.addListener(_onCallSyncUpdated);
     _loadContacts();
+    _loadRecentCallLogs();
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim();
@@ -43,9 +51,14 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
 
   @override
   void dispose() {
+    CallLogService.syncNotifier.removeListener(_onCallSyncUpdated);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onCallSyncUpdated() {
+    _loadRecentCallLogs();
   }
 
   Future<void> _loadContacts() async {
@@ -106,6 +119,59 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
     }
   }
 
+  Future<void> _loadRecentCallLogs() async {
+    try {
+      final logs = await CallLogService.loadCallLogs(limit: 50);
+      if (!mounted) return;
+      final localSessionCalls = _recentCalls.where((c) => c['isLocalCall'] == true).toList();
+      if (logs.isEmpty && localSessionCalls.isEmpty) return;
+
+      setState(() {
+        _recentCalls
+          ..clear()
+          ..addAll(localSessionCalls);
+        for (final l in logs) {
+          final String type = (l['type'] ?? 'incoming').toString();
+          _recentCalls.add({
+            'name': (l['name'] ?? l['number'] ?? 'Contact').toString(),
+            'number': (l['number'] ?? '').toString(),
+            'email': (l['number'] ?? '').toString(),
+            'avatar': '',
+            'isVideo': false,
+            'isMissed': type == 'missed' || type == 'rejected',
+            'type': type,
+            'duration': l['duration'] ?? 0,
+            'formattedDuration': l['formattedDuration'] ?? '',
+            'formattedTime': l['formattedTime'] ?? 'Recent',
+            'time': l['formattedTime'] ?? 'Recent',
+          });
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _syncCallLogsNow() async {
+    if (_isSyncingCallLogs) return;
+    setState(() => _isSyncingCallLogs = true);
+    try {
+      final res = await CallLogService.syncCallLogs(limit: 50);
+      await _loadRecentCallLogs();
+      if (!mounted) return;
+      final bool ok = res['success'] == true;
+      final String msg = (res['message'] ?? (ok ? 'Call logs synced.' : 'Unable to load call logs.')).toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: ok ? AppTheme.brandBlue : AppTheme.accentCoral,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncingCallLogs = false);
+      }
+    }
+  }
+
   void _startCall({
     required String contactName,
     required String contactEmail,
@@ -116,11 +182,14 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
     setState(() {
       _recentCalls.insert(0, {
         'name': contactName,
+        'number': contactEmail,
         'email': contactEmail,
         'avatar': avatarUrl,
         'isVideo': isVideo,
         'isMissed': false,
-        'type': 'Outgoing ${isVideo ? "video" : "audio"} call',
+        'isLocalCall': true,
+        'type': 'outgoing',
+        'formattedTime': 'Just now',
         'time': 'Just now',
       });
     });
@@ -891,9 +960,10 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                           padding: const EdgeInsets.all(2),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(20),
-                            child: avatarUrl != null && avatarUrl.isNotEmpty && (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://'))
+                            child: resolveAvatarUrl(avatarUrl) != null
                                 ? Image.network(
-                                    avatarUrl,
+                                    resolveAvatarUrl(avatarUrl)!,
+                                    headers: ApiConfig.mediaHeaders,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => _buildUserAvatarFallback(userInitial),
                                   )
@@ -1105,6 +1175,25 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
               letterSpacing: 0.1,
             ),
           ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _isSyncingCallLogs ? null : _syncCallLogsNow,
+            icon: _isSyncingCallLogs
+                ? const SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentBlue),
+                  )
+                : const Icon(Icons.sync_rounded, size: 17, color: AppTheme.accentBlue),
+            label: Text(
+              _isSyncingCallLogs ? 'Syncing Call Logs...' : 'Sync Phone Call Logs',
+              style: const TextStyle(color: AppTheme.accentBlue, fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: AppTheme.accentBlue.withValues(alpha: 0.4)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
           const SizedBox(height: 40),
         ],
       ),
@@ -1115,113 +1204,96 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
   // RECENT CALL ACTIVITY LIST
   // ----------------------------------------------------
   Widget _buildRecentActivityList() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF171B26) : Colors.white;
+    final borderColor = isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE2E8F0);
+    final textPrimary = isDark ? Colors.white : AppTheme.textPrimaryLight;
+    final textSecondary = isDark ? const Color(0xFF8E95A5) : const Color(0xFF64748B);
+    final filtered = filterCallLogs(_recentCalls, _callHistoryFilter);
+
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: _recentCalls.length + 1,
+      itemCount: (filtered.isEmpty ? 1 : filtered.length) + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 10, top: 6),
-            child: Text(
-              'History',
-              style: TextStyle(
-                color: Color(0xFF8E95A5),
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
+          return Padding(
+            padding: const EdgeInsets.only(left: 4, right: 4, bottom: 10, top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Call Logs & History',
+                      style: TextStyle(
+                        color: textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _isSyncingCallLogs ? null : _syncCallLogsNow,
+                      icon: _isSyncingCallLogs
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentBlue),
+                            )
+                          : const Icon(Icons.sync_rounded, size: 16, color: AppTheme.accentBlue),
+                      label: Text(
+                        _isSyncingCallLogs ? 'Syncing...' : 'Sync',
+                        style: const TextStyle(color: AppTheme.accentBlue, fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                CallLogFilterBar(
+                  selectedFilter: _callHistoryFilter,
+                  onSelected: (f) => setState(() => _callHistoryFilter = f),
+                  activeColor: AppTheme.brandBlue,
+                  isDark: isDark,
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (filtered.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            child: Center(
+              child: Text(
+                'No $_callHistoryFilter calls in your history.',
+                style: TextStyle(color: textSecondary, fontSize: 13.5),
               ),
             ),
           );
         }
 
-        final call = _recentCalls[index - 1];
-        final bool isMissed = call['isMissed'] == true;
+        final call = filtered[index - 1];
         final bool isVideo = call['isVideo'] == true;
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF171B26),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.04)),
-          ),
-          child: Row(
-            children: [
-              // Contact profile picture
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppTheme.accentBlue.withOpacity(0.2),
-                backgroundImage: (call['avatar'] as String).isNotEmpty
-                    ? NetworkImage(call['avatar'])
-                    : null,
-                child: (call['avatar'] as String).isEmpty
-                    ? Text(
-                        call['name'][0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 14),
-
-              // Contact Name & Call Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      call['name'],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Icon(
-                          isMissed
-                              ? Icons.call_missed
-                              : (isVideo ? Icons.videocam_outlined : Icons.call_made),
-                          size: 14,
-                          color: isMissed ? AppTheme.accentCoral : const Color(0xFF10B981),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${call['type']} • ${call['time']}',
-                          style: TextStyle(
-                            color: isMissed ? AppTheme.accentCoral : const Color(0xFF8E95A5),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Option to call contact again
-              IconButton(
-                icon: Icon(
-                  isVideo ? Icons.videocam_rounded : Icons.phone,
-                  color: AppTheme.accentBlue,
-                  size: 24,
-                ),
-                tooltip: 'Call again',
-                onPressed: () {
-                  _startCall(
-                    contactName: call['name'],
-                    contactEmail: call['email'],
-                    avatarUrl: call['avatar'],
-                    isVideo: isVideo,
-                  );
-                },
-              ),
-            ],
-          ),
+        return CallLogTile(
+          call: call,
+          cardColor: cardColor,
+          borderColor: borderColor,
+          textPrimary: textPrimary,
+          textSecondary: textSecondary,
+          actionColor: AppTheme.accentBlue,
+          onCallTap: () {
+            _startCall(
+              contactName: (call['name'] ?? 'Contact').toString(),
+              contactEmail: (call['email'] ?? call['number'] ?? '').toString(),
+              avatarUrl: (call['avatar'] ?? '').toString(),
+              isVideo: isVideo,
+            );
+          },
         );
       },
     );
@@ -1354,10 +1426,11 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
               decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 16),
-            CircleAvatar(
+            SafeAvatar(
+              url: user?.personalProfile?.avatarUrl,
+              fallbackText: name,
+              size: 60,
               radius: 30,
-              backgroundColor: AppTheme.accentBlue,
-              child: Text(name[0].toUpperCase(), style: const TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 10),
             Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -1418,10 +1491,11 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
-                  CircleAvatar(
+                  SafeAvatar(
+                    url: user?.personalProfile?.avatarUrl,
+                    fallbackText: name,
+                    size: 40,
                     radius: 20,
-                    backgroundColor: AppTheme.accentBlue,
-                    child: Text(name[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

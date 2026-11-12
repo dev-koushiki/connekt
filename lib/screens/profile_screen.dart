@@ -1,8 +1,14 @@
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../config/api_config.dart';
 import '../config/app_theme.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
+import '../widgets/safe_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
   final UserModel? user;
@@ -28,6 +34,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   late TabController _tabController;
   late String _currentMode;
   UserModel? _user;
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _isUploadingAvatar = false;
+  bool _isLoggingOut = false;
 
   @override
   void initState() {
@@ -46,6 +55,153 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         _currentMode = widget.user?.currentMode ?? 'common';
       });
     }
+  }
+
+  void _handleLogout() {
+    if (_isLoggingOut) return;
+    setState(() => _isLoggingOut = true);
+    try {
+      widget.onLogout();
+    } finally {
+      if (mounted) {
+        setState(() => _isLoggingOut = false);
+      }
+    }
+  }
+
+  void _showSnack(String message, {bool isError = false, Color? color}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppTheme.accentCoral : (color ?? AppTheme.brandBlue),
+      ),
+    );
+  }
+
+  Future<void> _uploadAvatarBytes(List<int> bytes, String fileName) async {
+    if (bytes.isEmpty) return;
+    const maxBytes = 5 * 1024 * 1024;
+    if (bytes.length > maxBytes) {
+      _showSnack('Profile photo must be 5MB or smaller.', isError: true);
+      return;
+    }
+
+    setState(() => _isUploadingAvatar = true);
+    try {
+      final uint8 = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+      final updated = await ApiService.uploadAvatar(
+        uint8,
+        fileName,
+        currentUser: _user,
+      );
+      if (!mounted) return;
+      setState(() => _user = updated);
+      widget.onUserUpdated?.call(updated);
+      _showSnack('Profile picture updated!', color: AppTheme.brandBlue);
+    } catch (e) {
+      if (mounted) {
+        _showSnack(e.toString().replaceAll('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+      }
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    if (_isUploadingAvatar) return;
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      await _uploadAvatarBytes(bytes, picked.name);
+    } catch (_) {
+      await _pickAvatarFromFiles();
+    }
+  }
+
+  Future<void> _pickAvatarFromFiles() async {
+    if (_isUploadingAvatar) return;
+    try {
+      final file = await FilePicker.pickFile(type: FileType.image);
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      await _uploadAvatarBytes(bytes, file.name);
+    } catch (e) {
+      _showSnack('Could not pick image: $e', isError: true);
+    }
+  }
+
+  void _showAvatarPickerSheet(bool isDark) {
+    if (_isUploadingAvatar) return;
+    final primaryColor = isDark ? Colors.white : AppTheme.textPrimaryLight;
+    final mutedColor = isDark ? AppTheme.textSecondary : const Color(0xFF64748B);
+    final isDesktopOrWeb = kIsWeb ||
+        Theme.of(context).platform == TargetPlatform.windows ||
+        Theme.of(context).platform == TargetPlatform.linux ||
+        Theme.of(context).platform == TargetPlatform.macOS;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppTheme.bgCard : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Set Profile Picture',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: primaryColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (!isDesktopOrWeb)
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_rounded, color: AppTheme.brandBlue),
+                  title: Text('Take Photo', style: TextStyle(color: primaryColor)),
+                  subtitle: Text('Use your device camera', style: TextStyle(color: mutedColor, fontSize: 12)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndUploadAvatar(ImageSource.camera);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: AppTheme.brandBlue),
+                title: Text('Choose from Gallery', style: TextStyle(color: primaryColor)),
+                subtitle: Text('Pick a photo from your library', style: TextStyle(color: mutedColor, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndUploadAvatar(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open_rounded, color: AppTheme.brandBlue),
+                title: Text('Browse Files', style: TextStyle(color: primaryColor)),
+                subtitle: Text('Select JPG, PNG, WEBP, or GIF up to 5MB', style: TextStyle(color: mutedColor, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAvatarFromFiles();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _handleModeSwitch(String mode) async {
@@ -212,6 +368,60 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     const SizedBox(height: 16),
 
                     if (selectedSheetTab == 0) ...[
+                      // Profile Photo Row
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppTheme.bgInput : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: sheetBorderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            SafeAvatar(
+                              url: personal?.avatarUrl,
+                              fallbackText: personal?.displayName.isNotEmpty == true
+                                  ? personal!.displayName
+                                  : (_user?.username ?? 'U'),
+                              size: 48,
+                              radius: 24,
+                              fallbackIcon: Icons.person,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Profile Picture',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                  Text(
+                                    'JPG, PNG, WEBP up to 5MB',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? AppTheme.textMuted : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _showAvatarPickerSheet(isDark);
+                              },
+                              icon: const Icon(Icons.camera_alt_outlined, size: 16),
+                              label: const Text('Change Photo', style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
                       // Personal Fields
                       TextField(
                         controller: fullNameCtrl,
@@ -413,7 +623,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           IconButton(
             icon: const Icon(Icons.logout, color: AppTheme.brandRed),
             tooltip: 'Log Out',
-            onPressed: widget.onLogout,
+            onPressed: _isLoggingOut ? null : _handleLogout,
           ),
         ],
       ),
@@ -422,10 +632,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           children: [
             const SizedBox(height: 16),
 
-            // Avatar Header with Tap to Edit
+            // Avatar Header with Tap to Change Photo
             Center(
               child: GestureDetector(
-                onTap: () => _openEditProfileDialog(isDark),
+                onTap: _isUploadingAvatar ? null : () => _showAvatarPickerSheet(isDark),
                 child: Stack(
                   children: [
                     Container(
@@ -438,13 +648,33 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       padding: const EdgeInsets.all(3),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(45),
-                        child: personal?.avatarUrl.isNotEmpty == true && (personal!.avatarUrl.startsWith('http://') || personal!.avatarUrl.startsWith('https://'))
-                            ? Image.network(
-                                personal!.avatarUrl,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (resolveAvatarUrl(personal?.avatarUrl) != null)
+                              Image.network(
+                                resolveAvatarUrl(personal?.avatarUrl)!,
+                                headers: ApiConfig.mediaHeaders,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 45, color: Colors.white),
                               )
-                            : const Icon(Icons.person, size: 45, color: Colors.white),
+                            else
+                              const Icon(Icons.person, size: 45, color: Colors.white),
+                            if (_isUploadingAvatar)
+                              Container(
+                                color: Colors.black45,
+                                alignment: Alignment.center,
+                                child: const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                     Positioned(
@@ -466,7 +696,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                        child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
                       ),
                     ),
                   ],
@@ -749,6 +979,28 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           onChanged: (_) {},
                           activeColor: AppTheme.brandBlue,
                           contentPadding: EdgeInsets.zero,
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _isLoggingOut ? null : _handleLogout,
+                            icon: const Icon(Icons.logout_rounded, color: AppTheme.brandRed),
+                            label: const Text(
+                              'Sign Out',
+                              style: TextStyle(
+                                color: AppTheme.brandRed,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(color: AppTheme.brandRed.withValues(alpha: 0.5)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),

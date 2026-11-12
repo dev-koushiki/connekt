@@ -36,9 +36,16 @@ class ApiService {
   }
 
   async request(endpoint, options = {}) {
+    const {
+      skipAuthExpired = false,
+      timeoutMs = 0,
+      headers: customHeaders = {},
+      ...fetchOptions
+    } = options;
+
     const url = `${this.baseUrl}${endpoint}`;
     const headers = {
-      ...(options.headers || {})
+      ...customHeaders
     };
 
     const token = this.getToken();
@@ -46,21 +53,37 @@ class ApiService {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    if (!(fetchOptions.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
 
+    let controller = null;
+    let timeoutId = null;
+    if (timeoutMs > 0 && !fetchOptions.signal && typeof AbortController !== 'undefined') {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    }
+
     const config = {
-      ...options,
-      headers
+      ...fetchOptions,
+      headers,
+      ...(controller ? { signal: controller.signal } : {})
     };
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
+      const rawText = await response.text();
+      let data = {};
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText);
+        } catch (_) {
+          data = { message: rawText };
+        }
+      }
 
       if (!response.ok) {
-        if (response.status === 401) {
+        if (response.status === 401 && !skipAuthExpired) {
           // Token expired or session invalid
           this.removeToken();
           window.dispatchEvent(new CustomEvent('auth:expired'));
@@ -70,8 +93,10 @@ class ApiService {
 
       return data;
     } catch (err) {
-      console.error(`[API Error] ${options.method || 'GET'} ${endpoint}:`, err);
+      console.error(`[API Error] ${fetchOptions.method || 'GET'} ${endpoint}:`, err);
       throw err;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
@@ -112,7 +137,11 @@ class ApiService {
 
     getMe: () => this.request('/auth/me'),
 
-    logout: () => this.request('/auth/logout', { method: 'POST' })
+    logout: () => this.request('/auth/logout', {
+      method: 'POST',
+      skipAuthExpired: true,
+      timeoutMs: 3000
+    })
   };
 
   // User & Mode Management API endpoints
@@ -347,6 +376,22 @@ class ApiService {
         method: 'POST',
         body: JSON.stringify({ recipients })
       })
+  };
+
+  // Phone Contacts & Device Call Logs API endpoints (Synced with Mobile App)
+  calls = {
+    getDeviceLogs: (params = {}) => {
+      const q = new URLSearchParams(params).toString();
+      return this.request(`/calls/device-logs${q ? '?' + q : ''}`);
+    },
+
+    requestSync: () =>
+      this.request('/calls/request-sync', {
+        method: 'POST'
+      }),
+
+    getSyncStatus: () =>
+      this.request('/calls/sync-status')
   };
 }
 

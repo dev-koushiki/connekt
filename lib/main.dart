@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'config/api_config.dart';
 import 'config/app_theme.dart';
 import 'models/user_model.dart';
 import 'services/api_service.dart';
+import 'services/call_log_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/meetings_screen.dart';
@@ -28,6 +30,7 @@ class ConnektApp extends StatefulWidget {
 class _ConnektAppState extends State<ConnektApp> {
   UserModel? _currentUser;
   bool _isLoading = true;
+  int _authEpoch = 0;
 
   @override
   void initState() {
@@ -42,10 +45,13 @@ class _ConnektAppState extends State<ConnektApp> {
   }
 
   Future<void> _checkAuth() async {
+    final epoch = _authEpoch;
+
     // 1. Check local cache first for instant 0ms app launch
     try {
       final cached = await ApiService.getCachedUser();
-      if (cached != null && mounted) {
+      if (!mounted || epoch != _authEpoch) return;
+      if (cached != null) {
         setState(() {
           _currentUser = cached;
           _isLoading = false;
@@ -59,28 +65,45 @@ class _ConnektAppState extends State<ConnektApp> {
         const Duration(seconds: 2),
         onTimeout: () => null,
       );
-      if (mounted) {
-        setState(() {
-          if (user != null) {
-            _currentUser = user;
-          }
-          _isLoading = false;
-        });
-      }
+      if (!mounted || epoch != _authEpoch) return;
+
+      final hasToken = (await ApiService.getToken())?.isNotEmpty ?? false;
+      if (!mounted || epoch != _authEpoch) return;
+
+      setState(() {
+        if (user != null) {
+          _currentUser = user;
+        } else if (!hasToken) {
+          _currentUser = null;
+        }
+        _isLoading = false;
+      });
     } catch (_) {
-      if (mounted) {
+      if (mounted && epoch == _authEpoch) {
         setState(() => _isLoading = false);
       }
     }
   }
 
   void _onAuthSuccess(UserModel user) {
-    setState(() => _currentUser = user);
+    _authEpoch++;
+    setState(() {
+      _currentUser = user;
+      _isLoading = false;
+    });
   }
 
-  void _onLogout() async {
-    await ApiService.logout();
-    setState(() => _currentUser = null);
+  Future<void> _onLogout() async {
+    _authEpoch++;
+    final token = await ApiService.getToken();
+    await ApiService.clearToken();
+    if (mounted) {
+      setState(() {
+        _currentUser = null;
+        _isLoading = false;
+      });
+    }
+    unawaited(ApiService.revokeSessionOnServer(token));
   }
 
   @override
@@ -103,6 +126,7 @@ class _ConnektAppState extends State<ConnektApp> {
               : _currentUser == null
                   ? AuthScreen(onAuthSuccess: _onAuthSuccess)
                   : MainNavigationShell(
+                      key: ValueKey(_currentUser!.id),
                       user: _currentUser!,
                       onLogout: _onLogout,
                     ),
@@ -128,31 +152,55 @@ class MainNavigationShell extends StatefulWidget {
 
 class _MainNavigationShellState extends State<MainNavigationShell> {
   int _currentIndex = 0;
+  int _chatsInitialTabIndex = 0;
   late UserModel _user;
+  Timer? _callSyncTimer;
 
   @override
   void initState() {
     super.initState();
     _user = widget.user;
+    _initCallLogSync();
+  }
+
+  @override
+  void didUpdateWidget(covariant MainNavigationShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.user != oldWidget.user) {
+      setState(() => _user = widget.user);
+    }
+  }
+
+  @override
+  void dispose() {
+    _callSyncTimer?.cancel();
+    super.dispose();
+  }
+
+  void _initCallLogSync() {
+    // 1. Sync device call logs once UI mounts (immediately reads logs if permission is allowed)
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        CallLogService.syncCallLogs();
+      }
+    });
+
+    // 2. Poll periodically (every 10s) to check if the website has requested a fresh sync
+    _callSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!mounted) return;
+      try {
+        final requested = await ApiService.checkCallSyncRequested();
+        if (requested && mounted) {
+          await CallLogService.syncCallLogs();
+        }
+      } catch (_) {}
+    });
   }
 
   void _onModeChanged(String newMode) {
-    setState(() {
-      _user = UserModel(
-        id: _user.id,
-        phone: _user.phone,
-        username: _user.username,
-        email: _user.email,
-        currentMode: newMode,
-        role: _user.role,
-        personalProfile: _user.personalProfile,
-        professionalProfile: _user.professionalProfile,
-        skills: _user.skills,
-        experience: _user.experience,
-        education: _user.education,
-        privacySettings: _user.privacySettings,
-      );
-    });
+    final updated = _user.copyWith(currentMode: newMode);
+    setState(() => _user = updated);
+    unawaited(ApiService.saveCachedUser(updated));
   }
 
   @override
@@ -163,7 +211,16 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         user: _user,
         onModeChanged: _onModeChanged,
         onNavigateToTab: (index) {
-          setState(() => _currentIndex = index);
+          setState(() {
+            if (index == 2) _chatsInitialTabIndex = 0;
+            _currentIndex = index;
+          });
+        },
+        onOpenCallLogs: () {
+          setState(() {
+            _chatsInitialTabIndex = 2;
+            _currentIndex = 2;
+          });
         },
       ),
       // Index 1: Meetings Module
@@ -174,6 +231,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       // Index 2: Chats Module
       ChatsScreen(
         user: _user,
+        initialTabIndex: _chatsInitialTabIndex,
         onBackToHome: () => setState(() => _currentIndex = 0),
       ),
       // Index 3: Mails Module

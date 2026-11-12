@@ -9,8 +9,9 @@ void main() {
     expect(ApiConfig.formatEndpoint('localhost:5000', endpoint: '/api'), 'http://localhost:5000/api');
   });
 
-  test('ApiConfig testHost connects to active server on 192.168.29.98:5000', () async {
-    final isAlive = await ApiConfig.testHost('192.168.29.98:5000');
+  test('ApiConfig testHost connects to active server on defaultHost or localhost', () async {
+    final isAlive = await ApiConfig.testHost(ApiConfig.defaultHost) ||
+        await ApiConfig.testHost('localhost:5000');
     expect(isAlive, isTrue);
   });
 

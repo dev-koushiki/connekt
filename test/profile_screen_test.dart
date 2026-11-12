@@ -60,4 +60,67 @@ void main() {
     expect(find.text('Location'), findsOneWidget);
     expect(find.text('Website'), findsOneWidget);
   });
+
+  testWidgets('ProfileScreen triggers onLogout from AppBar and Settings Sign Out button', (WidgetTester tester) async {
+    int logoutCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light(),
+        home: ProfileScreen(
+          user: testUser,
+          onLogout: () => logoutCalls++,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Log Out'));
+    await tester.pump();
+    expect(logoutCalls, 1);
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    final signOutFinder = find.text('Sign Out');
+    await tester.ensureVisible(signOutFinder);
+    await tester.tap(signOutFinder);
+    await tester.pump();
+    expect(logoutCalls, 2);
+  });
+
+  testWidgets('ProfileScreen opens Set Profile Picture sheet from avatar header and Edit Profile dialog', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light(),
+        home: ProfileScreen(
+          user: testUser,
+          onLogout: () {},
+        ),
+      ),
+    );
+
+    // Entry point 1: Tapping the avatar camera badge
+    await tester.tap(find.byIcon(Icons.camera_alt_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set Profile Picture'), findsOneWidget);
+    expect(find.text('Choose from Gallery'), findsOneWidget);
+    expect(find.text('Browse Files'), findsOneWidget);
+
+    // Dismiss photo sheet by popping
+    Navigator.of(tester.element(find.text('Set Profile Picture'))).pop();
+    await tester.pumpAndSettle();
+
+    // Entry point 2: Edit Profile sheet -> Change Photo
+    await tester.tap(find.text('Edit Profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile Picture'), findsOneWidget);
+    expect(find.text('Change Photo'), findsOneWidget);
+
+    await tester.tap(find.text('Change Photo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set Profile Picture'), findsOneWidget);
+  });
 }

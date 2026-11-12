@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
+import '../widgets/safe_avatar.dart';
 
 class MeetingCallScreen extends StatefulWidget {
   final String contactName;
@@ -82,7 +83,7 @@ class _MeetingCallScreenState extends State<MeetingCallScreen> {
                     padding: const EdgeInsets.all(4),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(60),
-                      child: widget.avatarUrl.isNotEmpty && (widget.avatarUrl.startsWith('http://') || widget.avatarUrl.startsWith('https://'))
+                      child: isValidHttpUrl(widget.avatarUrl)
                           ? Image.network(
                               widget.avatarUrl,
                               fit: BoxFit.cover,

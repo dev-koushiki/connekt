@@ -1,15 +1,31 @@
 import 'package:flutter/material.dart';
+import '../config/api_config.dart';
 import '../config/app_theme.dart';
 
 /// Validate if string is a non-empty, well-formed HTTP/HTTPS URL with host
 bool isValidHttpUrl(String? url) {
-  if (url == null || url.trim().isEmpty) return false;
+  if (url == null) return false;
   final clean = url.trim();
-  final uri = Uri.tryParse(clean);
-  return uri != null &&
-      uri.hasScheme &&
-      (uri.scheme == 'http' || uri.scheme == 'https') &&
-      uri.host.isNotEmpty;
+  if (clean.isEmpty) return false;
+  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
+  try {
+    final uri = Uri.tryParse(clean);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) return false;
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') return false;
+    final host = uri.host;
+    if (host.isEmpty) return false;
+    return host.contains('.') || host == 'localhost';
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Resolve an absolute HTTP(S) or backend-relative avatar path into a safe URL.
+String? resolveAvatarUrl(String? url) {
+  final resolved = ApiConfig.resolveMediaUrl(url);
+  if (resolved == null) return null;
+  return isValidHttpUrl(resolved) ? resolved : null;
 }
 
 /// A bulletproof Avatar widget that handles empty, malformed, or offline image URLs safely
@@ -31,17 +47,27 @@ class SafeAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isValidHttpUrl(url)) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: Image.network(
-          url!.trim(),
+    try {
+      final resolvedUrl = resolveAvatarUrl(url);
+      if (resolvedUrl != null) {
+        return SizedBox(
           width: size,
           height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildFallback(context),
-        ),
-      );
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: Image.network(
+              resolvedUrl,
+              headers: ApiConfig.mediaHeaders,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _buildFallback(context),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      // Fall through to fallback
     }
     return _buildFallback(context);
   }

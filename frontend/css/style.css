@@ -450,6 +450,11 @@ button, input, select, textarea {
   font-size: 0.82rem;
 }
 
+#btnLogout {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Form Controls */
 .form-group {
   margin-bottom: 18px;
@@ -741,6 +746,7 @@ button, input, select, textarea {
   object-fit: cover;
   border: 3px solid var(--accent-primary);
   box-shadow: var(--shadow-glow);
+  cursor: pointer;
 }
 
 /* Phase Preview Notice */

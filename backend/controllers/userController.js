@@ -114,9 +114,11 @@ class UserController {
 
       const avatarUrl = `/uploads/avatars/${req.file.filename}`;
       await UserModel.updateAvatarUrl(req.user.id, avatarUrl);
+      const user = await UserModel.findById(req.user.id);
 
       return successResponse(res, 200, 'Avatar uploaded successfully.', {
-        avatarUrl
+        avatarUrl,
+        user
       });
     } catch (err) {
       console.error('[Upload Avatar Error]:', err);

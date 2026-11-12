@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
+import '../widgets/safe_avatar.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   final String streamerName;
@@ -46,11 +47,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         fit: StackFit.expand,
         children: [
           // Stream Video Simulation Background
-          Image.network(
-            widget.streamUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(color: AppTheme.bgDark),
-          ),
+          isValidHttpUrl(widget.streamUrl)
+              ? Image.network(
+                  widget.streamUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(color: AppTheme.bgDark),
+                )
+              : Container(color: AppTheme.bgDark),
 
           // Dark Vignette
           Container(

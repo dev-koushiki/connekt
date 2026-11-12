@@ -1,5 +1,6 @@
 const { verifyToken } = require('../services/tokenService');
 const MeetingModel = require('../models/meetingModel');
+const CallModel = require('../models/callModel');
 
 // Map of active meeting rooms: roomCode -> Map(socketId -> peerData)
 const activeMeetingRooms = new Map();
@@ -57,6 +58,32 @@ const setupSockets = (io) => {
       if (socket.user) {
         console.log(`[Socket] User disconnected: @${socket.user.username}`);
         socket.broadcast.emit('user:offline', { userId: socket.user.id, lastSeen: new Date().toISOString() });
+      }
+    });
+
+    // ====================================================================
+    // CALL LOGS & PHONE CONTACTS SYNCHRONIZATION
+    // ====================================================================
+
+    socket.on('call-logs:request-sync', () => {
+      if (!socket.user) return;
+      CallModel.requestSync(socket.user.id);
+      socket.to(`user:${socket.user.id}`).emit('call-logs:sync-request', {
+        requestedAt: new Date().toISOString()
+      });
+    });
+
+    socket.on('call-logs:upload', async (logs) => {
+      if (!socket.user || !Array.isArray(logs)) return;
+      try {
+        const result = await CallModel.saveDeviceCallLogs(socket.user.id, logs);
+        io.to(`user:${socket.user.id}`).emit('call-logs:synced', {
+          count: result.insertedCount,
+          total: result.total,
+          syncedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('[Socket call-logs:upload Error]:', err.message);
       }
     });
 
