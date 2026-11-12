@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+bool get isFlutterTestEnv => Platform.environment.containsKey('FLUTTER_TEST');
+
 /// Probes the device's active private LAN /24 subnets on [port] to locate
 /// the CONNEKT server even after router/hotspot DHCP IP changes.
 Future<String?> probeLocalSubnetServer({

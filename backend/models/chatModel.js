@@ -167,6 +167,14 @@ class ChatModel {
         }
       }
 
+      const rawLastMsg = (row.last_message_text || '').trim();
+      const sanitizedLastMsg =
+        rawLastMsg === 'This message was deleted' ||
+        rawLastMsg === 'You deleted this message' ||
+        rawLastMsg === 'Conversation started'
+          ? ''
+          : rawLastMsg;
+
       return {
         id: row.id,
         name: row.peer_name,
@@ -174,7 +182,7 @@ class ChatModel {
         phone: row.peer_phone,
         username: row.peer_username,
         avatar: row.peer_avatar || '',
-        lastMessage: row.last_message_text || 'Conversation started',
+        lastMessage: sanitizedLastMsg,
         time: formattedTime,
         unread: row.unread_count || 0,
         isOnline: true,
@@ -202,6 +210,7 @@ class ChatModel {
       JOIN users u ON u.id = m.sender_id
       LEFT JOIN user_profiles p ON p.user_id = u.id
       WHERE m.conversation_id = $1
+        AND m.content NOT IN ('This message was deleted', 'You deleted this message')
       ORDER BY m.created_at ASC
       LIMIT 200;
     `;
@@ -285,30 +294,89 @@ class ChatModel {
   }
 
   /**
-   * Delete a message: for me or for everyone
+   * Delete a message completely (for_me or for_everyone) so no placeholder remains,
+   * and recalculate the conversation's last message preview and unread counts.
    */
   static async deleteMessage({ messageId, userId, mode }) {
     if (!messageId) return { success: false, error: 'Message ID is required' };
 
+    const client = await db.getClient();
     try {
-      if (mode === 'for_everyone') {
-        // Update content to "This message was deleted"
-        await db.query(
-          `UPDATE messages SET content = 'This message was deleted' WHERE id::text = $1`,
-          [messageId.toString()]
-        );
-        return { success: true, mode: 'for_everyone', messageId };
-      } else {
-        // Mode 'for_me': remove row or mark deleted
-        await db.query(
-          `DELETE FROM messages WHERE id::text = $1`,
-          [messageId.toString()]
-        );
-        return { success: true, mode: 'for_me', messageId };
+      await client.query('BEGIN');
+
+      const msgRes = await client.query(
+        `SELECT id, conversation_id, sender_id
+         FROM messages
+         WHERE id::text = $1
+         LIMIT 1`,
+        [messageId.toString()]
+      );
+
+      if (msgRes.rows.length === 0) {
+        await client.query('COMMIT');
+        return { success: true, mode, messageId };
       }
+
+      const targetMsg = msgRes.rows[0];
+      if (mode === 'for_everyone' && targetMsg.sender_id?.toString() !== userId?.toString()) {
+        await client.query('ROLLBACK');
+        return { success: false, statusCode: 403, error: 'You can only delete your own messages for everyone' };
+      }
+
+      // Remove the message row completely so nothing shows (as if nothing was sent)
+      await client.query(`DELETE FROM messages WHERE id = $1`, [targetMsg.id]);
+
+      // Update conversation preview to the latest remaining non-deleted message (or clear it)
+      const prevRes = await client.query(
+        `SELECT content, created_at
+         FROM messages
+         WHERE conversation_id = $1
+           AND content NOT IN ('This message was deleted', 'You deleted this message')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [targetMsg.conversation_id]
+      );
+
+      if (prevRes.rows.length > 0) {
+        const prev = prevRes.rows[0];
+        await client.query(
+          `UPDATE conversations
+           SET last_message_text = $1, last_message_at = $2
+           WHERE id = $3`,
+          [prev.content, prev.created_at, targetMsg.conversation_id]
+        );
+      } else {
+        await client.query(
+          `UPDATE conversations
+           SET last_message_text = NULL, last_message_at = created_at
+           WHERE id = $1`,
+          [targetMsg.conversation_id]
+        );
+      }
+
+      // Recompute participant unread counts after removing the message
+      await client.query(
+        `UPDATE conversation_participants cp
+         SET unread_count = (
+           SELECT COUNT(*)::int
+           FROM messages m
+           WHERE m.conversation_id = cp.conversation_id
+             AND m.sender_id != cp.user_id
+             AND m.is_read = false
+             AND m.content NOT IN ('This message was deleted', 'You deleted this message')
+         )
+         WHERE cp.conversation_id = $1`,
+        [targetMsg.conversation_id]
+      );
+
+      await client.query('COMMIT');
+      return { success: true, mode, messageId, conversationId: targetMsg.conversation_id };
     } catch (err) {
+      await client.query('ROLLBACK');
       console.warn('[Delete Message Warning]:', err.message);
-      return { success: true, mode, messageId };
+      return { success: false, error: err.message };
+    } finally {
+      client.release();
     }
   }
 }

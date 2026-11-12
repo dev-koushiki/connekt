@@ -196,6 +196,10 @@ const deleteMessage = async (req, res) => {
       mode: mode === 'for_everyone' ? 'for_everyone' : 'for_me'
     });
 
+    if (!result.success) {
+      return errorResponse(res, result.statusCode || 400, result.error || 'Failed to delete message');
+    }
+
     return successResponse(res, 200, 'Message deleted successfully', result);
   } catch (err) {
     console.error('[Delete Message Controller Error]:', err);

@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/api_config.dart';
 import '../config/app_theme.dart';
+import '../config/subnet_probe_stub.dart' if (dart.library.io) '../config/subnet_probe_io.dart';
 import '../services/api_service.dart';
 import '../widgets/safe_avatar.dart';
 
@@ -57,6 +58,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   // Selection mode state (WhatsApp item: "Select messages")
   bool _isSelectionMode = false;
   final Set<String> _selectedMsgIds = {};
+  final Map<String, bool> _deletedMsgModes = {};
+  Timer? _syncTimer;
 
   // Chat settings & preferences
   bool _isMuted = false;
@@ -75,10 +78,16 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     super.initState();
     _groupMembers = List.from(widget.initialMembers);
     _loadHistory();
+    if (!isFlutterTestEnv) {
+      _syncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        _loadHistory(silent: true);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _syncTimer?.cancel();
     _msgController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
@@ -87,19 +96,41 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  Future<void> _loadHistory() async {
+  static bool _isDeletedPlaceholder(Map<String, dynamic> msg) {
+    final text = (msg['text'] ?? '').toString().trim();
+    return msg['isDeletedForEveryone'] == true ||
+        text == 'You deleted this message' ||
+        text == 'This message was deleted';
+  }
+
+  Future<void> _loadHistory({bool silent = false}) async {
     try {
-      final history = await ApiService.getChatMessages(widget.contactName);
-      if (mounted) {
-        setState(() {
-          _messages.clear();
-          _messages.addAll(history);
-          _isLoading = false;
-        });
+      final rawHistory = await ApiService.getChatMessages(widget.contactName);
+      final filtered = rawHistory.where((m) {
+        final id = (m['id'] ?? '').toString();
+        return !_isDeletedPlaceholder(m) && !_deletedMsgModes.containsKey(id);
+      }).toList();
+
+      if (!mounted) return;
+      final unsentTemps = _messages
+          .where((m) {
+            final id = (m['id'] ?? '').toString();
+            return id.startsWith('temp_') && !_deletedMsgModes.containsKey(id);
+          })
+          .toList();
+      final nextMessages = [...filtered, ...unsentTemps];
+
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(nextMessages);
+        _isLoading = false;
+      });
+      if (!silent) {
         _scrollToBottom();
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && !silent) {
         setState(() => _isLoading = false);
       }
     }
@@ -132,8 +163,9 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
 
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final tempMsg = {
-      'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
+      'id': tempId,
       'isMe': true,
       'text': text,
       'time': _formatCurrentTime(),
@@ -146,13 +178,14 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     });
     _scrollToBottom();
 
-    _dispatchToBackend(text);
+    _dispatchToBackend(text, tempId: tempId);
   }
 
   Future<void> _sendRichMessage(Map<String, dynamic> richData) async {
     final jsonStr = jsonEncode(richData);
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final tempMsg = {
-      'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
+      'id': tempId,
       'isMe': true,
       'text': jsonStr,
       'time': _formatCurrentTime(),
@@ -164,12 +197,32 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     });
     _scrollToBottom();
 
-    _dispatchToBackend(jsonStr);
+    _dispatchToBackend(jsonStr, tempId: tempId);
   }
 
-  Future<void> _dispatchToBackend(String payloadText) async {
+  Future<void> _dispatchToBackend(String payloadText, {required String tempId}) async {
     try {
       final res = await ApiService.sendChatMessage(widget.contactName, payloadText);
+      final serverId = res['id']?.toString();
+
+      if (serverId != null && serverId.isNotEmpty) {
+        // If user deleted this optimistic message before the send call finished, delete it on backend immediately.
+        if (_deletedMsgModes.containsKey(tempId)) {
+          final forEveryone = _deletedMsgModes[tempId] == true;
+          await ApiService.deleteChatMessage(serverId, forEveryone: forEveryone);
+          return;
+        }
+        if (mounted) {
+          setState(() {
+            for (final m in _messages) {
+              if ((m['id'] ?? '').toString() == tempId) {
+                m['id'] = serverId;
+              }
+            }
+          });
+        }
+      }
+
       if (mounted && res['smsDispatched'] == true) {
         final phone = res['recipientPhone'] ?? widget.contactName;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -582,34 +635,6 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     bool isDark,
   ) {
     final rawText = (msg['text'] ?? '').toString();
-
-    // 0. DELETED MESSAGE (WHATSAPP-STYLE PLACEHOLDER)
-    final bool isDeleted = msg['isDeletedForEveryone'] == true ||
-        rawText == 'You deleted this message' ||
-        rawText == 'This message was deleted';
-
-    if (isDeleted) {
-      final deleteLabel = isMe ? 'You deleted this message' : 'This message was deleted';
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.block_flipped,
-            size: 15,
-            color: isMe ? Colors.white70 : subtextColor,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            deleteLabel,
-            style: TextStyle(
-              color: isMe ? Colors.white70 : subtextColor,
-              fontStyle: FontStyle.italic,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      );
-    }
 
     // Check if JSON payload
     if (rawText.startsWith('{') && rawText.endsWith('}')) {
@@ -1368,51 +1393,49 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                                         constraints: BoxConstraints(
                                           maxWidth: MediaQuery.of(context).size.width * 0.74,
                                         ),
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                        decoration: BoxDecoration(
-                                          color: (msg['isDeletedForEveryone'] == true || msg['text'] == 'You deleted this message' || msg['text'] == 'This message was deleted')
-                                              ? (isDark ? cardColor.withValues(alpha: 0.6) : const Color(0xFFF1F5F9))
-                                              : (isMe
-                                                  ? AppTheme.brandBlue
-                                                  : (isDark ? cardColor : const Color(0xFFF1F5F9))),
-                                          borderRadius: BorderRadius.only(
-                                            topLeft: const Radius.circular(18),
-                                            topRight: const Radius.circular(18),
-                                            bottomLeft: Radius.circular(isMe ? 18 : 4),
-                                            bottomRight: Radius.circular(isMe ? 4 : 18),
-                                          ),
-                                          boxShadow: isMe && msg['isDeletedForEveryone'] != true
-                                              ? [
-                                                  BoxShadow(
-                                                    color: AppTheme.brandBlue.withValues(alpha: 0.22),
-                                                    blurRadius: 8,
-                                                    offset: const Offset(0, 3),
-                                                  ),
-                                                ]
-                                              : null,
-                                        ),
-                                        child: _buildMessageContent(msg, isMe, textColor, subtextColor, isDark),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            msg['time'] ?? '',
-                                            style: TextStyle(color: subtextColor, fontSize: 10),
-                                          ),
-                                          if (isMe && msg['isDeletedForEveryone'] != true && msg['text'] != 'You deleted this message') ...[
-                                            const SizedBox(width: 4),
-                                            Icon(
-                                              Icons.done_all,
-                                              size: 14,
-                                              color: msg['isRead'] == true
-                                                  ? const Color(0xFF10B981)
-                                                  : subtextColor,
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: isMe
+                                                ? AppTheme.brandBlue
+                                                : (isDark ? cardColor : const Color(0xFFF1F5F9)),
+                                            borderRadius: BorderRadius.only(
+                                              topLeft: const Radius.circular(18),
+                                              topRight: const Radius.circular(18),
+                                              bottomLeft: Radius.circular(isMe ? 18 : 4),
+                                              bottomRight: Radius.circular(isMe ? 4 : 18),
                                             ),
+                                            boxShadow: isMe
+                                                ? [
+                                                    BoxShadow(
+                                                      color: AppTheme.brandBlue.withValues(alpha: 0.22),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(0, 3),
+                                                    ),
+                                                  ]
+                                                : null,
+                                          ),
+                                          child: _buildMessageContent(msg, isMe, textColor, subtextColor, isDark),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              msg['time'] ?? '',
+                                              style: TextStyle(color: subtextColor, fontSize: 10),
+                                            ),
+                                            if (isMe) ...[
+                                              const SizedBox(width: 4),
+                                              Icon(
+                                                Icons.done_all,
+                                                size: 14,
+                                                color: msg['isRead'] == true
+                                                    ? const Color(0xFF10B981)
+                                                    : subtextColor,
+                                              ),
+                                            ],
                                           ],
-                                        ],
-                                      ),
+                                        ),
                                     ],
                                   ),
                                   if (_isSelectionMode && isMe) ...[
@@ -3172,29 +3195,27 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   void _executeDeleteMessages(Set<String> ids, {required bool forEveryone}) {
     setState(() {
-      if (forEveryone) {
-        // Transform into "You deleted this message"
-        for (final m in _messages) {
-          final id = (m['id'] ?? '').toString();
-          if (ids.contains(id) && m['isMe'] == true) {
-            m['text'] = 'You deleted this message';
-            m['isDeletedForEveryone'] = true;
-          }
-        }
-      } else {
-        // Completely remove for me
-        _messages.removeWhere((m) => ids.contains((m['id'] ?? '').toString()));
+      for (final id in ids) {
+        _deletedMsgModes[id] = forEveryone;
       }
+      // Remove deleted messages completely so nothing appears (like nothing was sent).
+      _messages.removeWhere((m) {
+        final id = (m['id'] ?? '').toString();
+        if (!ids.contains(id)) return false;
+        return !forEveryone || m['isMe'] == true;
+      });
       _isSelectionMode = false;
       _selectedMsgIds.clear();
     });
 
     for (final id in ids) {
-      ApiService.deleteChatMessage(id, forEveryone: forEveryone);
+      if (!id.startsWith('temp_')) {
+        ApiService.deleteChatMessage(id, forEveryone: forEveryone);
+      }
     }
 
     _showSnack(forEveryone
-        ? 'You deleted this message for everyone'
+        ? 'Message deleted for everyone'
         : 'Message deleted for you');
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/app_theme.dart';
+import '../config/subnet_probe_stub.dart' if (dart.library.io) '../config/subnet_probe_io.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/call_log_service.dart';
@@ -105,6 +106,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   final List<Map<String, dynamic>> _callLogs = [];
   bool _isSyncingCalls = false;
   String _selectedCallFilter = 'All';
+  Timer? _convSyncTimer;
 
   @override
   void initState() {
@@ -120,6 +122,11 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     CallLogService.syncNotifier.addListener(_onCallLogsSyncChanged);
     _loadConversations();
     _loadCallLogs();
+    if (!isFlutterTestEnv) {
+      _convSyncTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+        _loadConversations();
+      });
+    }
     _searchController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -138,6 +145,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
 
   @override
   void dispose() {
+    _convSyncTimer?.cancel();
     CallLogService.syncNotifier.removeListener(_onCallLogsSyncChanged);
     _tabController.dispose();
     _searchController.dispose();
@@ -1624,48 +1632,59 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                                 ],
                                               ),
                                               const SizedBox(height: 4),
-                                              Row(
-                                                children: [
-                                                  // WhatsApp Status Ticks (✓✓)
-                                                  if (conv['isMe'] == true || conv['unread'] == 0) ...[
-                                                    const Icon(Icons.done_all_rounded, size: 16, color: Color(0xFF38BDF8)),
-                                                    const SizedBox(width: 4),
-                                                  ],
-                                                  Expanded(
-                                                    child: Text(
-                                                      conv['lastMessage'] ?? '',
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        color: unread > 0 ? textPrimary : AppTheme.textMuted,
-                                                        fontSize: 12.5,
-                                                        fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.w400,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  if (isMuted) ...[
-                                                    const SizedBox(width: 6),
-                                                    const Icon(Icons.volume_off_rounded, size: 14, color: AppTheme.textMuted),
-                                                  ],
-                                                  if (unread > 0) ...[
-                                                    const SizedBox(width: 8),
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: const Color(0xFF10B981),
-                                                        borderRadius: BorderRadius.circular(10),
-                                                      ),
-                                                      child: Text(
-                                                        '$unread',
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 10,
-                                                          fontWeight: FontWeight.bold,
+                                              Builder(
+                                                builder: (_) {
+                                                  final rawLast = (conv['lastMessage'] ?? '').toString().trim();
+                                                  final displayLast = (rawLast == 'This message was deleted' ||
+                                                          rawLast == 'You deleted this message' ||
+                                                          rawLast == 'Conversation started')
+                                                      ? ''
+                                                      : rawLast;
+                                                  return Row(
+                                                    children: [
+                                                      // WhatsApp Status Ticks (✓✓) only when a message exists
+                                                      if (displayLast.isNotEmpty &&
+                                                          (conv['isMe'] == true || conv['unread'] == 0)) ...[
+                                                        const Icon(Icons.done_all_rounded, size: 16, color: Color(0xFF38BDF8)),
+                                                        const SizedBox(width: 4),
+                                                      ],
+                                                      Expanded(
+                                                        child: Text(
+                                                          displayLast,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                          style: TextStyle(
+                                                            color: unread > 0 ? textPrimary : AppTheme.textMuted,
+                                                            fontSize: 12.5,
+                                                            fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.w400,
+                                                          ),
                                                         ),
                                                       ),
-                                                    ),
-                                                  ],
-                                                ],
+                                                      if (isMuted) ...[
+                                                        const SizedBox(width: 6),
+                                                        const Icon(Icons.volume_off_rounded, size: 14, color: AppTheme.textMuted),
+                                                      ],
+                                                      if (unread > 0) ...[
+                                                        const SizedBox(width: 8),
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFF10B981),
+                                                            borderRadius: BorderRadius.circular(10),
+                                                          ),
+                                                          child: Text(
+                                                            '$unread',
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  );
+                                                },
                                               ),
                                             ],
                                           ),

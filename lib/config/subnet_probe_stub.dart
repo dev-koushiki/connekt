@@ -1,3 +1,5 @@
+bool get isFlutterTestEnv => false;
+
 /// Web stub for LAN subnet probing (browser apps cannot open raw TCP sockets).
 Future<String?> probeLocalSubnetServer({
   int port = 5000,

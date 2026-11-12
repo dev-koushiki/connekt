@@ -259,10 +259,12 @@ void main() {
     await tester.tap(find.text('Delete for everyone'));
     await tester.pumpAndSettle();
 
-    // Verify original message is replaced with WhatsApp placeholder
+    // Verify deleted message vanishes completely as if nothing was sent
     expect(find.text('Hello testing delete feature'), findsNothing);
-    expect(find.text('You deleted this message'), findsOneWidget);
-    expect(find.byIcon(Icons.block_flipped), findsOneWidget);
+    expect(find.text('You deleted this message'), findsNothing);
+    expect(find.text('This message was deleted'), findsNothing);
+    expect(find.byIcon(Icons.block_flipped), findsNothing);
+    expect(find.text('No messages yet'), findsOneWidget);
   });
 
   testWidgets('ChatScreen delete for me completely removes message from chat', (tester) async {
