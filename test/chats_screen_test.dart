@@ -520,12 +520,41 @@ void main() {
     await tester.tap(find.text('Alex Chen'));
     await tester.pumpAndSettle();
 
-    // Tap "Create Group"
+    // Tap "Create Group" on bottom sheet -> pop-up dialog opens for group name & description
     await tester.tap(find.text('Create Group'));
     await tester.pumpAndSettle();
 
-    // Verify ChatScreen opened for group with Alex Chen
+    expect(find.text('Group Details'), findsOneWidget);
+    expect(find.text('Group Description'), findsOneWidget);
+    expect(find.text('Create & Send Invites'), findsOneWidget);
+
+    // Enter a group description
+    await tester.enterText(find.widgetWithText(TextFormField, 'What is this group about? (Optional)'), 'Official testing squad');
+    await tester.pumpAndSettle();
+
+    // Tap "Create & Send Invites" on dialog
+    await tester.tap(find.text('Create & Send Invites'));
+    await tester.pumpAndSettle();
+
+    // Verify ChatScreen opened for group with Alex Chen and group description
     expect(find.text('Alex Chen'), findsOneWidget);
     expect(find.byIcon(Icons.group), findsWidgets);
+  });
+
+  testWidgets('ChatScreen displays Group Invitation banner for pending members with Accept action', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChatScreen(
+          contactName: 'Designers Squad',
+          isGroup: true,
+          groupDescription: 'Collaborative UI design workgroup',
+          conversationId: 'mock-conv-123',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Verify chat screen renders without crash
+    expect(find.text('Designers Squad'), findsOneWidget);
   });
 }

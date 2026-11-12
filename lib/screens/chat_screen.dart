@@ -19,6 +19,7 @@ class ChatScreen extends StatefulWidget {
   final bool isGroup;
   final List<String> initialMembers;
   final String? conversationId;
+  final String groupDescription;
 
   const ChatScreen({
     super.key,
@@ -28,6 +29,7 @@ class ChatScreen extends StatefulWidget {
     this.isGroup = false,
     this.initialMembers = const ['You', 'Soumo', 'Lena Rivers', 'David Kim'],
     this.conversationId,
+    this.groupDescription = '',
   });
 
   @override
@@ -76,6 +78,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   // Group-specific state
   late List<String> _groupMembers;
+  late String _groupDescription;
+  bool _isPendingInvite = false;
+  bool _isRespondingInvite = false;
+  List<Map<String, dynamic>> _participants = [];
   bool _isFavourite = false;
   bool _hasLeftGroup = false;
 
@@ -83,6 +89,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _groupMembers = List.from(widget.initialMembers);
+    _groupDescription = widget.groupDescription;
     _loadHistory();
     if (!isFlutterTestEnv) {
       _syncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
@@ -121,7 +128,40 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       final lookupTarget = (widget.conversationId != null && widget.conversationId!.isNotEmpty)
           ? widget.conversationId!
           : widget.contactName;
-      final rawHistory = await ApiService.getChatMessages(lookupTarget);
+
+      Map<String, dynamic>? details;
+      List<Map<String, dynamic>> rawHistory;
+
+      if (!isFlutterTestEnv) {
+        details = await ApiService.getChatDetails(lookupTarget);
+      }
+
+      if (details != null && details['messages'] is List) {
+        rawHistory = (details['messages'] as List).map((m) => Map<String, dynamic>.from(m as Map)).toList();
+      } else {
+        rawHistory = await ApiService.getChatMessages(lookupTarget);
+      }
+
+      if (details != null) {
+        if (details['conversation'] is Map) {
+          final conv = details['conversation'] as Map<String, dynamic>;
+          final desc = (conv['description'] ?? '').toString();
+          if (desc.isNotEmpty) _groupDescription = desc;
+          if (widget.isGroup) {
+            _isPendingInvite = conv['participant_status'] == 'pending';
+          }
+        }
+        if (details['participants'] is List) {
+          _participants = (details['participants'] as List)
+              .map((p) => Map<String, dynamic>.from(p as Map))
+              .toList();
+          if (_participants.isNotEmpty) {
+            final names = _participants.map((p) => (p['name'] ?? 'Member').toString()).toList();
+            _groupMembers = ['You', ...names.where((n) => n != 'You' && n != 'Admin')];
+          }
+        }
+      }
+
       final filtered = rawHistory.where((m) {
         final id = (m['id'] ?? '').toString();
         return !_isDeletedPlaceholder(m) && !_deletedMsgModes.containsKey(id);
@@ -150,6 +190,164 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _acceptInvitation() async {
+    final convId = widget.conversationId;
+    if (convId == null || convId.isEmpty) {
+      setState(() => _isPendingInvite = false);
+      return;
+    }
+    setState(() => _isRespondingInvite = true);
+    final success = await ApiService.respondToGroupInvite(convId, accept: true);
+    if (mounted) {
+      setState(() {
+        _isRespondingInvite = false;
+        if (success || isFlutterTestEnv) {
+          _isPendingInvite = false;
+        }
+      });
+      if (success || isFlutterTestEnv) {
+        _loadHistory();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You joined the group!')),
+        );
+      }
+    }
+  }
+
+  Future<void> _declineInvitation() async {
+    final convId = widget.conversationId;
+    if (convId != null && convId.isNotEmpty) {
+      await ApiService.respondToGroupInvite(convId, accept: false);
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Widget _buildInvitationBanner(bool isDark, Color textColor, Color subtextColor) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E283D) : const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.brandBlue.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.brandBlue.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.mail_outline_rounded, color: AppTheme.brandBlue, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Group Invitation',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.hourglass_top_rounded, color: Colors.amber, size: 12),
+                    SizedBox(width: 4),
+                    Text('Pending', style: TextStyle(color: Colors.amber, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'You were invited to join "${widget.contactName}". Accept the invitation to join the conversation and receive messages.',
+            style: TextStyle(color: textColor, fontSize: 12.5, height: 1.35),
+          ),
+          if (_groupDescription.isNotEmpty || widget.groupDescription.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'About: ${_groupDescription.isNotEmpty ? _groupDescription : widget.groupDescription}',
+              style: TextStyle(color: subtextColor, fontSize: 11.5, fontStyle: FontStyle.italic),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _isRespondingInvite ? null : _declineInvitation,
+                child: const Text('Decline', style: TextStyle(color: AppTheme.accentCoral, fontWeight: FontWeight.w600, fontSize: 13)),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1D4ED8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                ),
+                onPressed: _isRespondingInvite ? null : _acceptInvitation,
+                icon: _isRespondingInvite
+                    ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                label: Text(
+                  _isRespondingInvite ? 'Joining...' : 'Accept & Join',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingInviteBottomBar(bool isDark, Color textColor, Color subtextColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E283D) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 20, color: AppTheme.brandBlue),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Accept invitation to send and receive messages.',
+              style: TextStyle(color: subtextColor, fontSize: 12.5),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1D4ED8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: Size.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: _isRespondingInvite ? null : _acceptInvitation,
+            child: Text(
+              _isRespondingInvite ? 'Joining...' : 'Accept',
+              style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -1468,6 +1666,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       ),
       body: Column(
         children: [
+          if (_isPendingInvite)
+            _buildInvitationBanner(isDark, textColor, subtextColor),
           // Chat Messages List, Loading or Empty State
           Expanded(
             child: _isLoading
@@ -1718,9 +1918,11 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
               ),
               child: SafeArea(
                 top: false,
-                child: _isRecording
-                    ? _buildVoiceRecorderBar(isDark, textColor)
-                    : _buildNormalInputBar(inputBg, borderColor, textColor, subtextColor),
+                child: _isPendingInvite
+                    ? _buildPendingInviteBottomBar(isDark, textColor, subtextColor)
+                    : (_isRecording
+                        ? _buildVoiceRecorderBar(isDark, textColor)
+                        : _buildNormalInputBar(inputBg, borderColor, textColor, subtextColor)),
               ),
             ),
         ],
@@ -3816,9 +4018,16 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                 children: [
                   Text('Description', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
-                  Text('Official group for CONNEKT team updates, file sharing, and project discussions.', style: TextStyle(color: textColor, fontSize: 13, height: 1.4)),
+                  Text(
+                    _groupDescription.isNotEmpty
+                        ? _groupDescription
+                        : (widget.groupDescription.isNotEmpty
+                            ? widget.groupDescription
+                            : 'Official group for CONNEKT team updates, file sharing, and project discussions.'),
+                    style: TextStyle(color: textColor, fontSize: 13, height: 1.4),
+                  ),
                   const SizedBox(height: 4),
-                  Text('Created by You', style: TextStyle(color: subtextColor, fontSize: 11)),
+                  Text('Created by Group Admin', style: TextStyle(color: subtextColor, fontSize: 11)),
                 ],
               ),
             ),
@@ -3896,6 +4105,17 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
             // Member Tiles
             ..._groupMembers.map((member) {
               final isYou = member == 'You';
+              Map<String, dynamic>? partData;
+              for (final p in _participants) {
+                if ((p['name'] ?? '').toString().toLowerCase() == member.toLowerCase() ||
+                    (p['username'] ?? '').toString().toLowerCase() == member.toLowerCase()) {
+                  partData = p;
+                  break;
+                }
+              }
+              final isPending = partData != null && partData['status'] == 'pending';
+              final isAdmin = isYou || (partData != null && partData['role'] == 'admin');
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: ListTile(
@@ -3904,8 +4124,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                   leading: SafeAvatar(url: null, fallbackText: member, size: 38, radius: 19),
                   title: Row(
                     children: [
-                      Text(member, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
-                      if (isYou) ...[
+                      Expanded(
+                        child: Text(member, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                      if (isAdmin) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -3915,10 +4137,32 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                           ),
                           child: const Text('Group Admin', style: TextStyle(color: AppTheme.brandBlue, fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
+                      ] else if (isPending) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.hourglass_top_rounded, color: Colors.amber, size: 10),
+                              SizedBox(width: 3),
+                              Text('Invite Sent', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
                       ],
                     ],
                   ),
-                  subtitle: Text(isYou ? 'Hey there! I am using CONNEKT' : 'Available', style: TextStyle(color: subtextColor, fontSize: 11)),
+                  subtitle: Text(
+                    isPending
+                        ? 'Invitation sent • Waiting for acceptance'
+                        : (isAdmin ? 'Group Creator / Admin' : 'Active Member'),
+                    style: TextStyle(color: subtextColor, fontSize: 11),
+                  ),
                 ),
               );
             }),

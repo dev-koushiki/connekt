@@ -33,6 +33,9 @@ router.get('/', requireAuth, chatController.getConversations);
 // Create a new group conversation
 router.post('/group', requireAuth, chatController.createGroup);
 
+// Respond to group invitation (accept or decline)
+router.post('/:conversationId/respond-invite', requireAuth, chatController.respondToInvite);
+
 // Get message history with a contact / phone / conversation
 router.get('/:target/messages', requireAuth, chatController.getMessages);
 

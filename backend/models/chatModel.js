@@ -1,5 +1,5 @@
 const db = require('../config/database');
-const { normalizePhoneNumber } = require('../services/smsService');
+const { sendSms, normalizePhoneNumber } = require('../services/smsService');
 
 class ChatModel {
   /**
@@ -127,32 +127,36 @@ class ChatModel {
   }
 
   /**
-   * Create a new group conversation with participants
+   * Create a new group conversation with title, description, and invite pending members
    */
-  static async createGroupConversation({ creatorId, title, memberIdentifiers = [] }) {
+  static async createGroupConversation({ creatorId, title, description = '', memberIdentifiers = [] }) {
     const cleanTitle = (title || '').toString().trim() || 'New Group';
+    const cleanDesc = (description || '').toString().trim();
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
       const convRes = await client.query(
-        `INSERT INTO conversations (type, title, last_message_text, last_message_at, created_at)
-         VALUES ('group', $1, 'Group created', NOW(), NOW())
-         RETURNING id, type, title, last_message_text, last_message_at, created_at`,
-        [cleanTitle]
+        `INSERT INTO conversations (type, title, description, creator_id, last_message_text, last_message_at, created_at)
+         VALUES ('group', $1, $2, $3, 'Group created', NOW(), NOW())
+         RETURNING id, type, title, description, creator_id, last_message_text, last_message_at, created_at`,
+        [cleanTitle, cleanDesc, creatorId]
       );
       const conversation = convRes.rows[0];
 
-      // Add creator as participant
+      // Add creator as accepted admin
       await client.query(
-        `INSERT INTO conversation_participants (conversation_id, user_id, unread_count, created_at)
-         VALUES ($1, $2, 0, NOW())`,
+        `INSERT INTO conversation_participants (conversation_id, user_id, status, role, unread_count, created_at)
+         VALUES ($1, $2, 'accepted', 'admin', 0, NOW())`,
         [conversation.id, creatorId]
       );
 
-      const addedUserIds = new Set([creatorId]);
-      const memberNames = [];
+      const creator = await this.findUserByIdentifier(creatorId);
+      const creatorName = creator?.display_name || creator?.full_name || creator?.username || 'Admin';
 
-      // Resolve and add each member
+      const addedUserIds = new Set([creatorId]);
+      const membersInfo = [];
+
+      // Resolve and add each member as 'pending'
       for (const identifier of memberIdentifiers) {
         if (!identifier) continue;
         let user = await this.findUserByIdentifier(identifier);
@@ -162,20 +166,46 @@ class ChatModel {
         if (user && !addedUserIds.has(user.id)) {
           addedUserIds.add(user.id);
           const name = user.display_name || user.full_name || user.username || identifier;
-          memberNames.push(name);
+          membersInfo.push({
+            id: user.id,
+            name,
+            phone: user.phone,
+            status: 'pending',
+            role: 'member'
+          });
+
           await client.query(
-            `INSERT INTO conversation_participants (conversation_id, user_id, unread_count, created_at)
-             VALUES ($1, $2, 0, NOW())`,
+            `INSERT INTO conversation_participants (conversation_id, user_id, status, role, unread_count, created_at)
+             VALUES ($1, $2, 'pending', 'member', 0, NOW())`,
             [conversation.id, user.id]
           );
+
+          // Dispatch invitation message ("allowed msg") via SMS if member has phone
+          const phone = user.phone || (identifier.replace(/\D/g, '').length >= 10 ? identifier : null);
+          if (phone) {
+            try {
+              const formattedPhone = normalizePhoneNumber(phone);
+              const inviteMsg = `[CONNEKT Group Invitation]: ${creatorName} invited you to join "${cleanTitle}"${cleanDesc ? `: "${cleanDesc}"` : ''}. Open CONNEKT to accept the invitation and start chatting! https://connekt.me`;
+              await sendSms({
+                to: formattedPhone,
+                message: inviteMsg,
+                purpose: 'group_invite'
+              });
+            } catch (smsErr) {
+              console.warn(`[Group Invite SMS Warning]: ${smsErr.message}`);
+            }
+          }
         }
       }
 
-      // Initial system message
+      // Initial system announcement
+      const inviteSummary = membersInfo.length > 0
+        ? `Invitations sent to ${membersInfo.map(m => m.name).join(', ')}. Members can join once they accept.`
+        : 'Group ready.';
       await client.query(
         `INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at)
          VALUES ($1, $2, $3, true, NOW())`,
-        [conversation.id, creatorId, `Group "${cleanTitle}" created`]
+        [conversation.id, creatorId, `Group "${cleanTitle}" created by ${creatorName}.${cleanDesc ? ` Description: ${cleanDesc}.` : ''} ${inviteSummary}`]
       );
 
       await client.query('COMMIT');
@@ -183,6 +213,7 @@ class ChatModel {
         id: conversation.id,
         type: 'group',
         title: cleanTitle,
+        description: cleanDesc,
         name: cleanTitle,
         target: conversation.id,
         lastMessage: `Group "${cleanTitle}" created`,
@@ -191,8 +222,65 @@ class ChatModel {
         isOnline: true,
         isGroup: true,
         memberCount: addedUserIds.size,
-        members: memberNames
+        members: membersInfo
       };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Respond to group invitation (accept or decline)
+   */
+  static async respondToGroupInvitation({ conversationId, userId, accept }) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const user = await this.findUserByIdentifier(userId);
+      const userName = user?.display_name || user?.full_name || user?.username || 'Member';
+
+      if (accept) {
+        const updateRes = await client.query(
+          `UPDATE conversation_participants
+           SET status = 'accepted'
+           WHERE conversation_id = $1 AND user_id = $2
+           RETURNING id, conversation_id, user_id, status`,
+          [conversationId, userId]
+        );
+
+        if (updateRes.rows.length === 0) {
+          await client.query(
+            `INSERT INTO conversation_participants (conversation_id, user_id, status, role, unread_count, created_at)
+             VALUES ($1, $2, 'accepted', 'member', 0, NOW())`,
+            [conversationId, userId]
+          );
+        }
+
+        // Post announcement into group
+        await client.query(
+          `INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at)
+           VALUES ($1, $2, $3, true, NOW())`,
+          [conversationId, userId, `${userName} accepted the invitation and joined the group.`]
+        );
+
+        await client.query(
+          `UPDATE conversations SET last_message_text = $1, last_message_at = NOW() WHERE id = $2`,
+          [`${userName} joined the group`, conversationId]
+        );
+
+        await client.query('COMMIT');
+        return { success: true, status: 'accepted', message: 'You have joined the group' };
+      } else {
+        await client.query(
+          `DELETE FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2`,
+          [conversationId, userId]
+        );
+        await client.query('COMMIT');
+        return { success: true, status: 'declined', message: 'Invitation declined' };
+      }
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -210,10 +298,13 @@ class ChatModel {
         c.id,
         c.type,
         c.title,
+        c.description,
         c.last_message_text,
         c.last_message_at,
         c.created_at,
         cp_self.unread_count,
+        cp_self.status AS participant_status,
+        cp_self.role AS participant_role,
         -- Peer identity info for direct chats
         u_peer.id AS peer_id,
         u_peer.phone AS peer_phone,
@@ -270,7 +361,11 @@ class ChatModel {
         unread: row.unread_count || 0,
         isOnline: true,
         type: row.type || 'direct',
-        isGroup: isGroup
+        isGroup: isGroup,
+        description: row.description || '',
+        participantStatus: row.participant_status || 'accepted',
+        participantRole: row.participant_role || 'member',
+        isPendingInvite: isGroup && row.participant_status === 'pending'
       };
     });
   }
@@ -279,6 +374,33 @@ class ChatModel {
    * Get all messages for a specific conversation
    */
   static async getMessages(conversationId, currentUserId) {
+    // 1. Fetch conversation metadata
+    const convMetaRes = await db.query(
+      `SELECT c.id, c.title, c.description, c.type, c.creator_id,
+              cp_self.status AS participant_status, cp_self.role AS participant_role
+       FROM conversations c
+       LEFT JOIN conversation_participants cp_self ON cp_self.conversation_id = c.id AND cp_self.user_id = $2
+       WHERE c.id = $1
+       LIMIT 1;`,
+      [conversationId, currentUserId]
+    );
+    const meta = convMetaRes.rows[0] || null;
+
+    // 2. Fetch participants with their invitation statuses
+    const partRes = await db.query(
+      `SELECT u.id, u.username, u.phone,
+              COALESCE(p.display_name, p.full_name, u.phone, u.username) AS name,
+              p.avatar_url,
+              cp.status, cp.role
+       FROM conversation_participants cp
+       JOIN users u ON u.id = cp.user_id
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+       WHERE cp.conversation_id = $1
+       ORDER BY (cp.role = 'admin') DESC, cp.created_at ASC;`,
+      [conversationId]
+    );
+
+    // 3. Query message history
     const query = `
       SELECT
         m.id,
@@ -300,17 +422,19 @@ class ChatModel {
     `;
     const res = await db.query(query, [conversationId]);
 
-    // Mark unread incoming messages as read
-    await db.query(
-      `UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id != $2 AND is_read = false`,
-      [conversationId, currentUserId]
-    );
-    await db.query(
-      `UPDATE conversation_participants SET unread_count = 0, last_read_at = NOW() WHERE conversation_id = $1 AND user_id = $2`,
-      [conversationId, currentUserId]
-    );
+    // Mark unread incoming messages as read if active
+    if (!meta || meta.participant_status === 'accepted') {
+      await db.query(
+        `UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id != $2 AND is_read = false`,
+        [conversationId, currentUserId]
+      );
+      await db.query(
+        `UPDATE conversation_participants SET unread_count = 0, last_read_at = NOW() WHERE conversation_id = $1 AND user_id = $2`,
+        [conversationId, currentUserId]
+      );
+    }
 
-    return res.rows.map(row => {
+    const messages = res.rows.map(row => {
       const d = new Date(row.created_at);
       const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -324,6 +448,12 @@ class ChatModel {
         createdAt: row.created_at
       };
     });
+
+    return {
+      messages,
+      conversation: meta,
+      participants: partRes.rows
+    };
   }
 
   /**
@@ -351,11 +481,11 @@ class ChatModel {
         [content.trim(), conversationId]
       );
 
-      // 3. Increment unread count for other participants
+      // 3. Increment unread count for accepted participants only
       await client.query(
         `UPDATE conversation_participants
          SET unread_count = unread_count + 1
-         WHERE conversation_id = $1 AND user_id != $2`,
+         WHERE conversation_id = $1 AND user_id != $2 AND COALESCE(status, 'accepted') = 'accepted'`,
         [conversationId, senderId]
       );
 

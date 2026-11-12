@@ -23,13 +23,15 @@ const getConversations = async (req, res) => {
 const createGroup = async (req, res) => {
   try {
     const creatorId = req.user.id;
-    const { title, members } = req.body;
+    const { title, description, members } = req.body;
     const groupTitle = (title || '').toString().trim() || 'New Group';
+    const groupDesc = (description || '').toString().trim();
     const memberList = Array.isArray(members) ? members : [];
 
     const groupConv = await ChatModel.createGroupConversation({
       creatorId,
       title: groupTitle,
+      description: groupDesc,
       memberIdentifiers: memberList
     });
 
@@ -37,6 +39,32 @@ const createGroup = async (req, res) => {
   } catch (err) {
     console.error('[Create Group Error]:', err);
     return errorResponse(res, 500, 'Failed to create group', err.message);
+  }
+};
+
+/**
+ * Respond to a group invitation (accept or decline)
+ */
+const respondToInvite = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
+    const { accept } = req.body;
+
+    if (!conversationId) {
+      return errorResponse(res, 400, 'Conversation ID is required');
+    }
+
+    const result = await ChatModel.respondToGroupInvitation({
+      conversationId,
+      userId,
+      accept: accept === true
+    });
+
+    return successResponse(res, 200, result.message, result);
+  } catch (err) {
+    console.error('[Respond To Invite Error]:', err);
+    return errorResponse(res, 500, 'Failed to respond to group invitation', err.message);
   }
 };
 
@@ -89,11 +117,15 @@ const getMessages = async (req, res) => {
       }
     }
 
-    const messages = await ChatModel.getMessages(conversationId, currentUserId);
+    const result = await ChatModel.getMessages(conversationId, currentUserId);
+    const messages = Array.isArray(result) ? result : (result.messages || []);
+
     return successResponse(res, 200, 'Messages retrieved successfully', {
       conversationId,
       peer: peerUser,
-      messages
+      messages,
+      conversation: result.conversation || null,
+      participants: result.participants || []
     });
   } catch (err) {
     console.error('[Get Messages Error]:', err);
@@ -152,6 +184,16 @@ const sendMessage = async (req, res) => {
     }
 
     if (existingConv) {
+      if (existingConv.type === 'group') {
+        const partCheck = await db.query(
+          `SELECT status FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2`,
+          [existingConv.id, senderId]
+        );
+        if (partCheck.rows.length > 0 && partCheck.rows[0].status === 'pending') {
+          return errorResponse(res, 403, 'You must accept the group invitation before sending messages.');
+        }
+      }
+
       const savedMsg = await ChatModel.saveMessage({
         conversationId: existingConv.id,
         senderId,
@@ -297,6 +339,7 @@ module.exports = {
   getConversations,
   getMessages,
   createGroup,
+  respondToInvite,
   sendMessage,
   uploadFile,
   deleteMessage

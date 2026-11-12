@@ -601,8 +601,12 @@ class ApiService {
     }
   }
 
-  /// Create a new group conversation with title and member identifiers
-  static Future<Map<String, dynamic>?> createGroupChat(String title, List<String> members) async {
+  /// Create a new group conversation with title, description, and member identifiers
+  static Future<Map<String, dynamic>?> createGroupChat(
+    String title,
+    List<String> members, {
+    String description = '',
+  }) async {
     try {
       final token = await getToken();
       final res = await _safeRequest((base) {
@@ -611,8 +615,49 @@ class ApiService {
           headers: _headers(token),
           body: jsonEncode({
             'title': title.trim(),
+            'description': description.trim(),
             'members': members,
           }),
+        );
+      });
+      final data = jsonDecode(res.body);
+      if (res.statusCode >= 400) {
+        return null;
+      }
+      return data['data'] as Map<String, dynamic>?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Respond to a group invitation (accept or decline)
+  static Future<bool> respondToGroupInvite(String conversationId, {required bool accept}) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.post(
+          Uri.parse('$base/chats/$conversationId/respond-invite'),
+          headers: _headers(token),
+          body: jsonEncode({
+            'accept': accept,
+          }),
+        );
+      });
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Get full chat history details including conversation metadata and participants
+  static Future<Map<String, dynamic>?> getChatDetails(String target) async {
+    try {
+      final token = await getToken();
+      final encodedTarget = Uri.encodeComponent(target.trim());
+      final res = await _safeRequest((base) {
+        return http.get(
+          Uri.parse('$base/chats/$encodedTarget/messages'),
+          headers: _headers(token),
         );
       });
       final data = jsonDecode(res.body);

@@ -185,12 +185,14 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     final targetName = (isGroup ? (conv['name'] ?? conv['title'] ?? 'Group') : (conv['target'] ?? conv['name'] ?? 'Chat')).toString();
     final avatar = (conv['avatar'] ?? '').toString();
     final convId = conv['id']?.toString();
+    final groupDesc = (conv['description'] ?? '').toString();
 
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           conversationId: convId,
           contactName: targetName,
+          groupDescription: groupDesc,
           avatarUrl: avatar,
           showBackButton: true,
           isGroup: isGroup,
@@ -773,6 +775,183 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     return digits;
   }
 
+  Future<void> _showGroupDetailsDialog({
+    required BuildContext parentContext,
+    required String initialName,
+    required List<String> selectedMembers,
+    required Future<void> Function(String name, String description) onConfirm,
+  }) async {
+    final nameController = TextEditingController(text: initialName);
+    final descController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+
+    await showDialog<void>(
+      context: parentContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final cardColor = AppTheme.getCardColor(ctx);
+          final textPrimary = AppTheme.getTextPrimary(ctx);
+
+          return AlertDialog(
+            backgroundColor: cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.brandBlue.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.groups_rounded, color: AppTheme.brandBlue, size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Group Details',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppTheme.textMuted, size: 20),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogCtx),
+                ),
+              ],
+            ),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (selectedMembers.isNotEmpty) ...[
+                      Text(
+                        'Added Members (${selectedMembers.length}):',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textMuted),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: selectedMembers.take(8).map((m) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.brandBlue.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            m,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.brandBlue),
+                          ),
+                        )).toList(),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    TextFormField(
+                      controller: nameController,
+                      autofocus: true,
+                      style: TextStyle(color: textPrimary, fontSize: 14),
+                      decoration: InputDecoration(
+                        labelText: 'Group Name *',
+                        labelStyle: const TextStyle(fontSize: 13),
+                        hintText: 'e.g. Project Team, Marketing',
+                        filled: true,
+                        fillColor: AppTheme.getInputColor(ctx),
+                        prefixIcon: const Icon(Icons.title_rounded, color: AppTheme.brandBlue, size: 20),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Please enter a group name';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: descController,
+                      maxLines: 3,
+                      style: TextStyle(color: textPrimary, fontSize: 13.5),
+                      decoration: InputDecoration(
+                        labelText: 'Group Description',
+                        labelStyle: const TextStyle(fontSize: 13),
+                        hintText: 'What is this group about? (Optional)',
+                        filled: true,
+                        fillColor: AppTheme.getInputColor(ctx),
+                        prefixIcon: const Icon(Icons.description_outlined, color: AppTheme.brandBlue, size: 20),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.brandBlue.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.brandBlue.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.mark_email_read_rounded, color: AppTheme.brandBlue, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'An invitation message will be sent to the added members. Once they accept the invitation, they can join and receive messages.',
+                              style: TextStyle(fontSize: 11.5, color: textPrimary, height: 1.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.pop(dialogCtx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1D4ED8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        if (formKey.currentState?.validate() == true) {
+                          setDialogState(() => isSubmitting = true);
+                          final groupName = nameController.text.trim();
+                          final groupDesc = descController.text.trim();
+                          Navigator.pop(dialogCtx);
+                          await onConfirm(groupName, groupDesc);
+                        }
+                      },
+                icon: isSubmitting
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.send_rounded, size: 16, color: Colors.white),
+                label: Text(
+                  isSubmitting ? 'Creating...' : 'Create & Send Invites',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showNewChatSheet(BuildContext context, {bool forceGroup = false}) {
     final contactController = TextEditingController();
     bool isGroup = forceGroup;
@@ -1289,13 +1468,8 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                       label: Text(isGroup ? 'Create Group' : 'Start Chat', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       onPressed: () async {
                         final input = contactController.text.trim();
-                        final String target;
                         if (isGroup) {
-                          if (input.isNotEmpty) {
-                            target = input;
-                          } else if (selectedGroupMembers.isNotEmpty) {
-                            target = selectedGroupMembers.take(3).join(', ');
-                          } else {
+                          if (selectedGroupMembers.isEmpty && input.isEmpty) {
                             ScaffoldMessenger.of(this.context).showSnackBar(
                               const SnackBar(
                                 content: Text('Please select contacts or enter a group name'),
@@ -1304,45 +1478,78 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                             );
                             return;
                           }
-                        } else {
-                          if (input.isEmpty) {
-                            ScaffoldMessenger.of(this.context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please enter a username, phone or select a contact'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                            return;
-                          }
-                          target = input;
+
+                          final suggestedName = input.isNotEmpty
+                              ? input
+                              : (selectedGroupMembers.isNotEmpty
+                                  ? selectedGroupMembers.take(3).join(', ')
+                                  : 'New Group');
+
+                          await _showGroupDetailsDialog(
+                            parentContext: sheetCtx,
+                            initialName: suggestedName,
+                            selectedMembers: selectedGroupMembers.toList(),
+                            onConfirm: (groupName, groupDesc) async {
+                              final nav = Navigator.of(this.context);
+                              Navigator.pop(ctx);
+
+                              Map<String, dynamic>? createdGroup;
+                              if (!isFlutterTestEnv) {
+                                try {
+                                  createdGroup = await ApiService.createGroupChat(
+                                    groupName,
+                                    selectedGroupMembers.toList(),
+                                    description: groupDesc,
+                                  );
+                                } catch (_) {}
+                              }
+
+                              if (!mounted) return;
+
+                              await nav.push(
+                                MaterialPageRoute(
+                                  builder: (_) => ChatScreen(
+                                    conversationId: createdGroup?['id']?.toString(),
+                                    contactName: groupName,
+                                    groupDescription: groupDesc,
+                                    avatarUrl: '',
+                                    showBackButton: true,
+                                    isGroup: true,
+                                    initialMembers: selectedGroupMembers.isNotEmpty
+                                        ? ['You', ...selectedGroupMembers]
+                                        : const ['You', 'Soumo', 'Lena Rivers', 'David Kim'],
+                                  ),
+                                ),
+                              );
+                              _loadConversations();
+                            },
+                          );
+                          return;
                         }
+
+                        if (input.isEmpty) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter a username, phone or select a contact'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+                        final target = input;
 
                         final nav = Navigator.of(this.context);
                         Navigator.pop(ctx);
-
-                        Map<String, dynamic>? createdGroup;
-                        if (isGroup && !isFlutterTestEnv) {
-                          try {
-                            createdGroup = await ApiService.createGroupChat(
-                              target,
-                              selectedGroupMembers.toList(),
-                            );
-                          } catch (_) {}
-                        }
 
                         if (!mounted) return;
 
                         await nav.push(
                           MaterialPageRoute(
                             builder: (_) => ChatScreen(
-                              conversationId: createdGroup?['id']?.toString(),
                               contactName: target,
                               avatarUrl: '',
                               showBackButton: true,
-                              isGroup: isGroup,
-                              initialMembers: isGroup && selectedGroupMembers.isNotEmpty
-                                  ? ['You', ...selectedGroupMembers]
-                                  : const ['You', 'Soumo', 'Lena Rivers', 'David Kim'],
+                              isGroup: false,
                             ),
                           ),
                         );
