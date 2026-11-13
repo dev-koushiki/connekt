@@ -358,7 +358,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ActionChip(
                         avatar: const Icon(Icons.cloud_outlined, size: 14),
                         label: const Text('5G Mobile Data (Cloud Tunnel)', style: TextStyle(fontSize: 11)),
-                        onPressed: () => setDialogState(() => hostController.text = 'https://fifty-heads-train.loca.lt'),
+                        onPressed: () => setDialogState(() => hostController.text = 'https://connekt-api-live.loca.lt'),
                       ),
                       ActionChip(
                         label: Text('Wi-Fi (${ApiConfig.defaultHost})', style: const TextStyle(fontSize: 11)),
@@ -449,91 +449,72 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Brand Header: Official CONNEKT Emblem Badge
+              // Official CONNEKT Logo & Name (as in official brandmark)
               Center(
-                child: Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF1E283D) : const Color(0xFFE2E8F0),
-                      width: 1.2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isDark
-                            ? Colors.black.withValues(alpha: 0.35)
-                            : const Color(0x14000000),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  padding: const EdgeInsets.all(12),
-                  child: Image.asset(
-                    'assets/icons/connekt_emblem.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: Text(
-                        'C',
-                        style: TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.w900,
-                          color: AppTheme.brandRed,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Official CONNEKT Brandmark (Red & Blue Typography)
-              Center(
-                child: RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2.2,
-                      fontFamily: 'Roboto',
-                    ),
+                child: Image.asset(
+                  'assets/images/connekt_official_logo.png',
+                  width: 250,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextSpan(
-                        text: 'CONN',
-                        style: TextStyle(
-                          color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F3B82),
+                      Container(
+                        width: 68,
+                        height: 68,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF1E283D) : const Color(0xFFE2E8F0),
+                            width: 1.2,
+                          ),
+                        ),
+                        padding: const EdgeInsets.all(10),
+                        child: Image.asset('assets/icons/connekt_emblem.png', fit: BoxFit.contain),
+                      ),
+                      const SizedBox(height: 12),
+                      RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.2,
+                            fontFamily: 'Roboto',
+                          ),
+                          children: [
+                            TextSpan(
+                              text: 'CONN',
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F3B82),
+                              ),
+                            ),
+                            const TextSpan(
+                              text: 'E',
+                              style: TextStyle(color: AppTheme.brandRed),
+                            ),
+                            TextSpan(
+                              text: 'KT',
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F3B82),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const TextSpan(
-                        text: 'E',
+                      const SizedBox(height: 4),
+                      Text(
+                        'CONNECTING THE UNCONNECTED',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: AppTheme.brandRed,
-                        ),
-                      ),
-                      TextSpan(
-                        text: 'KT',
-                        style: TextStyle(
-                          color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F3B82),
+                          color: isDark ? AppTheme.textSecondary : const Color(0xFF64748B),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2.5,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'CONNECTING THE UNCONNECTED',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: isDark ? AppTheme.textSecondary : const Color(0xFF64748B),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2.6,
                 ),
               ),
               const SizedBox(height: 24),

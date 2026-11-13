@@ -5,6 +5,7 @@ import 'config/app_theme.dart';
 import 'models/user_model.dart';
 import 'services/api_service.dart';
 import 'services/call_log_service.dart';
+import 'screens/splash_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/meetings_screen.dart';
@@ -31,6 +32,7 @@ class ConnektApp extends StatefulWidget {
 class _ConnektAppState extends State<ConnektApp> {
   UserModel? _currentUser;
   bool _isLoading = true;
+  bool _showSplash = true;
   int _authEpoch = 0;
 
   @override
@@ -118,11 +120,13 @@ class _ConnektAppState extends State<ConnektApp> {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: currentThemeMode,
-          home: _isLoading
-              ? const Scaffold(
-                  body: Center(
-                    child: CircularProgressIndicator(color: AppTheme.brandBlue),
-                  ),
+          home: _showSplash
+              ? SplashScreen(
+                  onFinish: () {
+                    if (mounted) {
+                      setState(() => _showSplash = false);
+                    }
+                  },
                 )
               : _currentUser == null
                   ? AuthScreen(onAuthSuccess: _onAuthSuccess)

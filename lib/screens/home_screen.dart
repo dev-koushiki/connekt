@@ -1,11 +1,42 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../config/api_config.dart';
-import '../config/app_theme.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
-import '../services/theme_service.dart';
-import '../widgets/safe_avatar.dart';
+import '../services/call_log_service.dart';
+import '../services/api_service.dart';
+import 'calendar_scheduler_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class ReminderItem {
+  final String id;
+  String title;
+  DateTime? dueDateTime;
+  bool isCompleted;
+
+  ReminderItem({
+    required this.id,
+    required this.title,
+    this.dueDateTime,
+    this.isCompleted = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'dueDateTime': dueDateTime?.toIso8601String(),
+    'isCompleted': isCompleted,
+  };
+
+  factory ReminderItem.fromJson(Map<String, dynamic> json) => ReminderItem(
+    id: json['id'] as String? ?? DateTime.now().millisecondsSinceEpoch.toString(),
+    title: json['title'] as String? ?? '',
+    dueDateTime: json['dueDateTime'] != null ? DateTime.tryParse(json['dueDateTime'] as String) : null,
+    isCompleted: json['isCompleted'] as bool? ?? false,
+  );
+}
+
+class HomeScreen extends StatefulWidget {
   final UserModel? user;
   final ValueChanged<int>? onNavigateToTab;
   final ValueChanged<String>? onModeChanged;
@@ -17,150 +48,1079 @@ class HomeScreen extends StatelessWidget {
     this.onModeChanged,
   });
 
-  String get _displayName {
-    final personal = user?.personalProfile;
-    if (personal != null && personal.fullName.trim().isNotEmpty) {
-      return personal.fullName.trim();
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isProfessional = false;
+  String _quickNoteText = '';
+  List<ReminderItem> _reminders = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _isProfessional = widget.user?.currentMode == 'professional';
+    _loadLocalData();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.user?.currentMode != oldWidget.user?.currentMode) {
+      setState(() {
+        _isProfessional = widget.user?.currentMode == 'professional';
+      });
     }
-    if (personal != null && personal.displayName.trim().isNotEmpty) {
-      return personal.displayName.trim();
-    }
-    if (user != null && user!.username.trim().isNotEmpty) {
-      return user!.username.trim();
-    }
-    return 'User';
+  }
+
+  Future<void> _loadLocalData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final notes = prefs.getString('connekt_home_quick_note');
+      final remindersRaw = prefs.getStringList('connekt_home_reminders_v2');
+
+      setState(() {
+        if (notes != null) {
+          _quickNoteText = notes;
+        } else {
+          _quickNoteText = 'Draft presentation for next week\'s product demo.\nSync with regional leads.';
+        }
+
+        if (remindersRaw != null && remindersRaw.isNotEmpty) {
+          _reminders = remindersRaw.map((s) {
+            try {
+              return ReminderItem.fromJson(jsonDecode(s) as Map<String, dynamic>);
+            } catch (_) {
+              return ReminderItem(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                title: s,
+              );
+            }
+          }).toList();
+        } else {
+          _reminders = [
+            ReminderItem(
+              id: '1',
+              title: 'Review CONNEKT Architecture & Sync with Team',
+              dueDateTime: DateTime.now().add(const Duration(hours: 3)),
+            ),
+          ];
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveReminders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rawList = _reminders.map((r) => jsonEncode(r.toJson())).toList();
+      await prefs.setStringList('connekt_home_reminders_v2', rawList);
+    } catch (_) {}
+  }
+
+  Future<void> _saveQuickNote(String text) async {
+    _quickNoteText = text;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('connekt_home_quick_note', text);
+    } catch (_) {}
   }
 
   String get _connektEmail {
-    if (user != null && user!.email.trim().isNotEmpty) {
-      return user!.email.trim();
+    final rawUsername = widget.user?.username.trim();
+    if (rawUsername != null && rawUsername.isNotEmpty) {
+      return '$rawUsername@connect.net.in';
     }
-    if (user != null && user!.username.trim().isNotEmpty) {
-      return '${user!.username.trim().toLowerCase()}@connekt.me';
-    }
-    return 'user@connekt.me';
+    return 'user_id@connect.net.in';
   }
 
-  void _showNotificationsSheet(BuildContext context) {
-    final notifications = [
-      {
-        'title': 'Upcoming Meeting',
-        'body': 'CONNEKT Product & Architecture Sync starts in 15 minutes.',
-        'time': 'Just now',
-        'icon': Icons.videocam_rounded,
-        'isNew': true,
-      },
-      {
-        'title': 'Connekt Mail Delivery',
-        'body': 'Security Team: Welcome to CONNEKT – Account Setup & Security Keys',
-        'time': '1h ago',
-        'icon': Icons.mail_rounded,
-        'isNew': false,
-      },
+  void _toggleProfessionalMode(bool value) {
+    setState(() => _isProfessional = value);
+    final newMode = value ? 'professional' : 'common';
+    widget.onModeChanged?.call(newMode);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          value ? 'Switched to Professional Mode' : 'Switched to Personal Mode',
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF0F3B82),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // INTERACTIVE BOTTOM SHEETS & MODALS (Scheduler, World Clock, Reminders, Notes)
+  // ===========================================================================
+
+  void _showLanguageSheet(BuildContext context) {
+    final languages = [
+      {'name': 'English (US / UK)', 'code': 'en', 'selected': true},
+      {'name': 'हिन्दी (Hindi)', 'code': 'hi', 'selected': false},
+      {'name': 'বাংলা (Bengali)', 'code': 'bn', 'selected': false},
+      {'name': 'తెలుగు (Telugu)', 'code': 'te', 'selected': false},
+      {'name': 'मराठी (Marathi)', 'code': 'mr', 'selected': false},
+      {'name': 'Español (Spanish)', 'code': 'es', 'selected': false},
+      {'name': 'Français (French)', 'code': 'fr', 'selected': false},
+      {'name': 'Deutsch (German)', 'code': 'de', 'selected': false},
+      {'name': 'العربية (Arabic)', 'code': 'ar', 'selected': false},
     ];
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppTheme.bgCard,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
               child: Container(
-                width: 40,
+                width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: Colors.black26,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const Row(
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.notifications_active_rounded, color: AppTheme.accentBlue, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Notifications',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentCoral,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    '2 NEW',
-                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                Icon(Icons.translate_rounded, color: Color(0xFF0F3B82), size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Select Language',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F1E36),
                   ),
                 ),
               ],
             ),
-            const Divider(color: Colors.white10, height: 24),
-            ...notifications.map(
-              (n) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentBlue.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: languages.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (ctx, i) {
+                  final lang = languages[i];
+                  final isSel = lang['selected'] as bool;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      lang['name'] as String,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                        color: isSel ? const Color(0xFF0F3B82) : Colors.black87,
                       ),
-                      child: Icon(n['icon'] as IconData, color: AppTheme.accentBlue, size: 18),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    trailing: isSel
+                        ? const Icon(Icons.check_circle_rounded, color: Color(0xFF0F3B82))
+                        : null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Language set to ${lang['name']}'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showWorldClockSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final nowUtc = DateTime.now().toUtc();
+        final cities = [
+          {'city': 'New Delhi', 'country': 'India', 'offsetH': 5, 'offsetM': 30, 'code': 'IST'},
+          {'city': 'London', 'country': 'United Kingdom', 'offsetH': 0, 'offsetM': 0, 'code': 'GMT'},
+          {'city': 'New York', 'country': 'United States', 'offsetH': -5, 'offsetM': 0, 'code': 'EST'},
+          {'city': 'Tokyo', 'country': 'Japan', 'offsetH': 9, 'offsetM': 0, 'code': 'JST'},
+          {'city': 'San Francisco', 'country': 'United States', 'offsetH': -8, 'offsetM': 0, 'code': 'PST'},
+        ];
+
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  Icon(Icons.access_time_rounded, color: Color(0xFF0F3B82), size: 22),
+                  SizedBox(width: 8),
+                  Text(
+                    'World Clock',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F1E36)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ...cities.map((c) {
+                final cTime = nowUtc.add(
+                  Duration(hours: c['offsetH'] as int, minutes: c['offsetM'] as int),
+                );
+                final hour = cTime.hour % 12 == 0 ? 12 : cTime.hour % 12;
+                final minute = cTime.minute.toString().padLeft(2, '0');
+                final ampm = cTime.hour >= 12 ? 'PM' : 'AM';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              c['city'] as String,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F1E36)),
+                            ),
+                            Text(
+                              '${c['country']} • ${c['code']}',
+                              style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '$hour:$minute $ampm',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F3B82),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  int get _activeReminderCount => _reminders.where((r) => !r.isCompleted).length;
+
+  String _formatReminderDateTime(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final targetDate = DateTime(dt.year, dt.month, dt.day);
+
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    final weekday = weekdays[dt.weekday - 1];
+    final month = months[dt.month - 1];
+
+    String datePart;
+    if (targetDate == today) {
+      datePart = 'Today';
+    } else if (targetDate == tomorrow) {
+      datePart = 'Tomorrow';
+    } else {
+      datePart = '$weekday, ${dt.day} $month';
+    }
+
+    final hour12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+
+    return '$datePart • $hour12:$minute $ampm';
+  }
+
+  String _formatDateOnly(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final target = DateTime(d.year, d.month, d.day);
+
+    if (target == today) return 'Today';
+    if (target == tomorrow) return 'Tomorrow';
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${d.day} ${months[d.month - 1]}';
+  }
+
+  String _formatTimeOnly(TimeOfDay t) {
+    final hour12 = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final minute = t.minute.toString().padLeft(2, '0');
+    final ampm = t.hour >= 12 ? 'PM' : 'AM';
+    return '$hour12:$minute $ampm';
+  }
+
+  Widget _buildQuickDateChip(String label, {required bool isSelected, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F3B82) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF0F3B82) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRemindersSheet(BuildContext context) {
+    final textController = TextEditingController();
+    DateTime? selectedDate = DateTime.now();
+    TimeOfDay? selectedTime = const TimeOfDay(hour: 10, minute: 0);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final activeCount = _reminders.where((r) => !r.isCompleted).length;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 16,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF0F3B82), size: 22),
+                        SizedBox(width: 8),
+                        Text(
+                          'Reminders',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F1E36)),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: activeCount > 0 ? const Color(0xFFE53935) : const Color(0xFF64748B),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$activeCount',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Reminders list
+                if (_reminders.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: Text(
+                        'No pending reminders! Tap below to add.',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                      ),
+                    ),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.35,
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _reminders.length,
+                      itemBuilder: (ctx, idx) {
+                        final rem = _reminders[idx];
+                        final isOverdue = rem.dueDateTime != null &&
+                            rem.dueDateTime!.isBefore(DateTime.now()) &&
+                            !rem.isCompleted;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: rem.isCompleted ? const Color(0xFFF8FAFC) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: rem.isCompleted ? const Color(0xFFE2E8F0) : const Color(0xFFD6E2F2),
+                              width: 1,
+                            ),
+                            boxShadow: rem.isCompleted
+                                ? null
+                                : [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.03),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Text(
-                                n['title'] as String,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                              // Completion Checkbox
+                              InkWell(
+                                onTap: () {
+                                  setSheetState(() => rem.isCompleted = !rem.isCompleted);
+                                  setState(() {});
+                                  _saveReminders();
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    rem.isCompleted ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                    color: rem.isCompleted ? const Color(0xFF22C55E) : const Color(0xFF0F3B82),
+                                    size: 20,
+                                  ),
+                                ),
                               ),
-                              Text(
-                                n['time'] as String,
-                                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                              const SizedBox(width: 8),
+
+                              // Title & Formatted Date/Time
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      rem.title,
+                                      style: TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: rem.isCompleted ? const Color(0xFF94A3B8) : const Color(0xFF1E293B),
+                                        decoration: rem.isCompleted ? TextDecoration.lineThrough : null,
+                                      ),
+                                    ),
+                                    if (rem.dueDateTime != null) ...[
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.schedule_rounded,
+                                            size: 12,
+                                            color: isOverdue
+                                                ? const Color(0xFFE53935)
+                                                : (rem.isCompleted ? const Color(0xFF94A3B8) : const Color(0xFF0F3B82)),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _formatReminderDateTime(rem.dueDateTime!),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                              color: isOverdue
+                                                ? const Color(0xFFE53935)
+                                                : (rem.isCompleted ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                            ),
+                                          ),
+                                          if (isOverdue) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEE2E2),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'Overdue',
+                                                style: TextStyle(
+                                                  color: Color(0xFFE53935),
+                                                  fontSize: 8.5,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+
+                              // Delete Icon
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF94A3B8)),
+                                onPressed: () {
+                                  setSheetState(() => _reminders.removeAt(idx));
+                                  setState(() {});
+                                  _saveReminders();
+                                },
                               ),
                             ],
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            n['body'] as String,
-                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                    if (n['isNew'] == true) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.accentCoral,
-                          shape: BoxShape.circle,
+                  ),
+
+                const SizedBox(height: 12),
+
+                // Reminder Title input field
+                TextField(
+                  controller: textController,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. semester exam, doctor appointment...',
+                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                    filled: true,
+                    fillColor: const Color(0xFFF1F5F9),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF0F3B82), width: 1.5),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Specific Date & Time Pickers + Add button row
+                Row(
+                  children: [
+                    // Date Picker
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final now = DateTime.now();
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate ?? now,
+                            firstDate: now.subtract(const Duration(days: 30)),
+                            lastDate: now.add(const Duration(days: 365 * 3)),
+                            builder: (ctx, child) => Theme(
+                              data: Theme.of(ctx).copyWith(
+                                colorScheme: const ColorScheme.light(
+                                  primary: Color(0xFF0F3B82),
+                                  onPrimary: Colors.white,
+                                  onSurface: Color(0xFF1E293B),
+                                ),
+                              ),
+                              child: child!,
+                            ),
+                          );
+                          if (picked != null) {
+                            setSheetState(() => selectedDate = picked);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8EFF9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFCFDCED)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.calendar_month_rounded, size: 15, color: Color(0xFF0F3B82)),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  selectedDate != null ? _formatDateOnly(selectedDate!) : 'Pick Date',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F3B82),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Time Picker
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: selectedTime ?? TimeOfDay.now(),
+                            builder: (ctx, child) => Theme(
+                              data: Theme.of(ctx).copyWith(
+                                colorScheme: const ColorScheme.light(
+                                  primary: Color(0xFF0F3B82),
+                                  onPrimary: Colors.white,
+                                  onSurface: Color(0xFF1E293B),
+                                ),
+                              ),
+                              child: child!,
+                            ),
+                          );
+                          if (picked != null) {
+                            setSheetState(() => selectedTime = picked);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8EFF9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFCFDCED)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.access_time_rounded, size: 15, color: Color(0xFF0F3B82)),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  selectedTime != null ? _formatTimeOnly(selectedTime!) : 'Pick Time',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F3B82),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // Add Button
+                    ElevatedButton(
+                      onPressed: () {
+                        final text = textController.text.trim();
+                        if (text.isEmpty) return;
+
+                        DateTime? due;
+                        if (selectedDate != null) {
+                          final time = selectedTime ?? const TimeOfDay(hour: 9, minute: 0);
+                          due = DateTime(
+                            selectedDate!.year,
+                            selectedDate!.month,
+                            selectedDate!.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        }
+
+                        final item = ReminderItem(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          title: text,
+                          dueDateTime: due,
+                        );
+
+                        setSheetState(() {
+                          _reminders.insert(0, item);
+                        });
+                        setState(() {});
+                        _saveReminders();
+                        textController.clear();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F3B82),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                      child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                    ),
                   ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // Quick presets row
+                Row(
+                  children: [
+                    const Text(
+                      'Quick: ',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+                    ),
+                    _buildQuickDateChip(
+                      'Today',
+                      isSelected: selectedDate != null &&
+                          DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day) ==
+                              DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+                      onTap: () {
+                        setSheetState(() => selectedDate = DateTime.now());
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    _buildQuickDateChip(
+                      'Tomorrow',
+                      isSelected: selectedDate != null &&
+                          DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day) ==
+                              DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).add(const Duration(days: 1)),
+                      onTap: () {
+                        setSheetState(() => selectedDate = DateTime.now().add(const Duration(days: 1)));
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    _buildQuickDateChip(
+                      '+7 Days',
+                      isSelected: false,
+                      onTap: () {
+                        setSheetState(() => selectedDate = DateTime.now().add(const Duration(days: 7)));
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+        },
+      ),
+    );
+  }
+
+  void _showQuickNotesSheet(BuildContext context) {
+    final noteController = TextEditingController(text: _quickNoteText);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
+        final screenHeight = MediaQuery.of(ctx).size.height;
+
+        return AnimatedPadding(
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: screenHeight * 0.70, // Prevents covering the whole screen
+            ),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFEF9C3), // Soft yellow sticky note theme
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 16,
+                  offset: Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(left: 20, right: 20, top: 14, bottom: 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top drag handle
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCA8A04).withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Header: Quick Notes + Actions (Hide Keyboard & Save Note)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.edit_note_rounded, color: Color(0xFF854D0E), size: 24),
+                            SizedBox(width: 8),
+                            Text(
+                              'Quick Notes',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'Caveat',
+                                color: Color(0xFF713F12),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            if (keyboardInset > 0)
+                              IconButton(
+                                icon: const Icon(Icons.keyboard_hide_rounded, color: Color(0xFF854D0E), size: 20),
+                                tooltip: 'Hide Keyboard',
+                                onPressed: () => FocusScope.of(ctx).unfocus(),
+                              ),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                _saveQuickNote(noteController.text);
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Quick Note saved!'),
+                                    duration: Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                              label: const Text('Save Note', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF854D0E),
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Post-it Sticky Text Field
+                    TextField(
+                      controller: noteController,
+                      minLines: 3,
+                      maxLines: 5,
+                      autofocus: false,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF422006),
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      cursorColor: const Color(0xFF854D0E),
+                      decoration: InputDecoration(
+                        hintText: 'Type your ideas, scratch notes or thoughts here...',
+                        hintStyle: TextStyle(
+                          color: const Color(0xFF854D0E).withValues(alpha: 0.5),
+                          fontSize: 14,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.65),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFFDE047), width: 1.2),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFFDE047), width: 1.2),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFCA8A04), width: 1.8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Footer Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Saved locally on this device',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF854D0E), fontStyle: FontStyle.italic),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            noteController.clear();
+                          },
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Clear', style: TextStyle(fontSize: 11.5, color: Color(0xFF854D0E))),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showInviteFriendsSheet(BuildContext context) {
+    final inviteLink = 'https://connekt.me/join?ref=${widget.user?.username ?? 'welcome'}';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: const BoxDecoration(
+                color: Color(0xFF4C85E6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.group_add_rounded, color: Colors.white, size: 30),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Invite Friends to CONNEKT',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F1E36)),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Connect the unconnected. Share your personal invite link with friends and colleagues.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      inviteLink,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12.5, color: Color(0xFF0F3B82), fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 20, color: Color(0xFF0F3B82)),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: inviteLink));
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Invite link copied to clipboard!')),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Primary Action: Open Contact List
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showInviteContactsSheet(context, inviteLink);
+                },
+                icon: const Icon(Icons.share_rounded, color: Colors.white),
+                label: const Text('Share Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4C85E6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
             ),
@@ -170,483 +1130,1569 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  void _showInviteContactsSheet(BuildContext context, String inviteLink) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => _InviteContactsSheetContent(
+        inviteLink: inviteLink,
+        user: widget.user,
+      ),
+    );
+  }
+
+  void _showMenuSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'CONNEKT Quick Menu',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F1E36)),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.person_outline_rounded, color: Color(0xFF0F3B82)),
+              title: const Text('My Profile & Settings'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onNavigateToTab?.call(5); // Go to Profile
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.public_rounded, color: Color(0xFF0F3B82)),
+              title: const Text('Social & Vibe Feed'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onNavigateToTab?.call(4); // Go to Social
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF0F3B82)),
+              title: const Text('All Conversations'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onNavigateToTab?.call(2); // Go to Chats
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.mail_outline_rounded, color: Color(0xFF0F3B82)),
+              title: const Text('Connekt Mail Inbox'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onNavigateToTab?.call(3); // Go to Mails
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined, color: Color(0xFF0F3B82)),
+              title: const Text('Instant Meetings & Schedule'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onNavigateToTab?.call(1); // Go to Meetings
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.notifications_active_rounded, color: Color(0xFF0F3B82), size: 22),
+                    SizedBox(width: 8),
+                    Text(
+                      'Notifications',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F1E36)),
+                    ),
+                  ],
+                ),
+                Text(
+                  '2 NEW',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFE53935)),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            _buildNotificationItem(
+              icon: Icons.chat_rounded,
+              title: '2 Unread Messages in Chat',
+              time: 'Just now',
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onNavigateToTab?.call(2);
+              },
+            ),
+            _buildNotificationItem(
+              icon: Icons.mail_rounded,
+              title: '4 New Mails in Connekt Mail',
+              time: '15m ago',
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onNavigateToTab?.call(3);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem({
+    required IconData icon,
+    required String title,
+    required String time,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F3B82).withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: const Color(0xFF0F3B82), size: 20),
+      ),
+      title: Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF0F1E36))),
+      subtitle: Text(time, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+      onTap: onTap,
+    );
+  }
+
+  // ===========================================================================
+  // MAIN BUILD METHOD (Matches Image 1 Layout & Visuals Exactly)
+  // ===========================================================================
+
   @override
   Widget build(BuildContext context) {
-    final avatarUrl = user?.personalProfile?.avatarUrl;
-    final currentMode = user?.currentMode ?? 'common';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.bgDark : AppTheme.bgLight,
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Column(
+        child: Column(
+          children: [
+            // -----------------------------------------------------------------
+            // 1. TOP HEADER BANNER: High-Tech Cyber Network + CONNEKT + Language
+            // -----------------------------------------------------------------
+            _buildHeaderBanner(context),
+
+            // -----------------------------------------------------------------
+            // 2. SCROLLABLE BODY CONTENT (Widgets, Profile Card, Large Action Cards, Vibe)
+            // -----------------------------------------------------------------
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  children: [
+                    // TOP WIDGETS ROW (Scheduler on Left + 3 Stacked Cards on Right)
+                    _buildTopWidgetsSection(context),
+
+                    const SizedBox(height: 12),
+
+                    // MIDDLE USER PROFILE / CONNEKT CARD
+                    _buildConnektUserCard(context),
+
+                    const SizedBox(height: 12),
+
+                    // MAIN MODULE ACTION CARDS (Chat, Mail, Meeting)
+                    _buildMainActionCard(
+                      icon: Icons.chat_bubble_rounded,
+                      title: 'Chat',
+                      badgeCount: 2,
+                      onTap: () => widget.onNavigateToTab?.call(2), // Chats tab
+                    ),
+                    const SizedBox(height: 10),
+                    _buildMainActionCard(
+                      icon: Icons.mail_rounded,
+                      title: 'Mail',
+                      badgeCount: 4,
+                      onTap: () => widget.onNavigateToTab?.call(3), // Mail tab
+                    ),
+                    const SizedBox(height: 10),
+                    _buildMainActionCard(
+                      icon: Icons.videocam_rounded,
+                      title: 'Meeting',
+                      badgeCount: 0,
+                      onTap: () => widget.onNavigateToTab?.call(1), // Meetings tab
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // "vibe" BANNER
+                    _buildVibeBanner(context),
+
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
+
+            // -----------------------------------------------------------------
+            // 3. BOTTOM NAVIGATION BAR (Profile, Notifications, Vibe, Menu)
+            // -----------------------------------------------------------------
+            _buildBottomBar(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // COMPONENT BUILDERS
+  // ===========================================================================
+
+  Widget _buildHeaderBanner(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 76,
+      decoration: const BoxDecoration(
+        color: Color(0xFF071426),
+        image: DecorationImage(
+          image: AssetImage('assets/images/header_cyber_banner.png'),
+          fit: BoxFit.cover,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Left: CONNEKT Brand & Subtitle
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ----------------------------------------------------
-              // 1. TOP SECTION (Compact Mobile Header)
-              // ----------------------------------------------------
-              Row(
-                children: [
-                  // CONNEKT Brand Logo Badge (Official Red Swirl Emblem)
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF13192B) : Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF243048) : const Color(0xFFE2E8F0),
-                        width: 1,
-                      ),
+              Text(
+                'CONNEKT',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 23,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.2,
+                  shadows: [
+                    Shadow(
+                      color: const Color(0xFF00D2FF).withValues(alpha: 0.45),
+                      blurRadius: 10,
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    padding: const EdgeInsets.all(5),
-                    child: Image.asset(
-                      'assets/icons/connekt_emblem.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Text(
-                          'C',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.brandRed,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Application Name & Mode Pill
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'CONNEKT',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: isDark ? Colors.white : AppTheme.brandBlue,
-                          letterSpacing: 1.6,
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: AppTheme.brandBlue.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: AppTheme.brandBlue.withValues(alpha: 0.3),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Text(
-                          currentMode.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFF60A5FA) : AppTheme.brandBlue,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  // Light Mood and Dark Mood Toggle Option
-                  IconButton(
-                    icon: Icon(
-                      isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                      color: isDark ? const Color(0xFFFFB800) : const Color(0xFF334155),
-                      size: 22,
-                    ),
-                    tooltip: isDark ? 'Switch to Light Mood' : 'Switch to Dark Mood',
-                    onPressed: () => ThemeService.toggleTheme(),
-                  ),
-                  // Notification Bell with Red Indicator Dot
-                  IconButton(
-                    icon: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          color: isDark ? Colors.white : AppTheme.textPrimaryLight,
-                          size: 24,
-                        ),
-                        Positioned(
-                          right: 1,
-                          top: 1,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: AppTheme.accentCoral,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isDark ? AppTheme.bgDark : AppTheme.bgLight,
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    tooltip: 'Notifications',
-                    onPressed: () => _showNotificationsSheet(context),
-                  ),
-                  const SizedBox(width: 4),
-                  // User Profile Avatar
-                  GestureDetector(
-                    onTap: () => onNavigateToTab?.call(5),
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppTheme.accentBlue.withValues(alpha: 0.6),
-                          width: 1.5,
-                        ),
-                      ),
-                      padding: const EdgeInsets.all(2),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(19),
-                        child: resolveAvatarUrl(avatarUrl) != null
-                            ? Image.network(
-                                resolveAvatarUrl(avatarUrl)!,
-                                headers: ApiConfig.mediaHeaders,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _buildAvatarFallback(),
-                              )
-                            : _buildAvatarFallback(),
-                      ),
-                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'CONNECTING THE UNCONNECTED',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2.2,
+                ),
+              ),
+            ],
+          ),
+
+          // Right: Circular Language / Translation Button
+          GestureDetector(
+            onTap: () => _showLanguageSheet(context),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-
-              const SizedBox(height: 20),
-
-              // ----------------------------------------------------
-              // 2. WELCOME SECTION
-              // ----------------------------------------------------
-              Text(
-                'Hello, $_displayName!',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFF60A5FA) : AppTheme.brandBlue,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Welcome to CONNEKT!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : AppTheme.textPrimaryLight,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Everything you need to connect, communicate and collaborate.',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
-                  height: 1.4,
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // ----------------------------------------------------
-              // 3. MAIN APPLICATION SECTION (3 Interactive Cards)
-              // ----------------------------------------------------
-              // Card 1: Meetings
-              _buildAppCard(
-                context: context,
-                icon: Icons.videocam_rounded,
-                title: 'Meetings',
-                description: 'Connect through video and audio meetings.',
-                badgeText: '1 UPCOMING',
-                badgeColor: AppTheme.accentBlue,
-                infoSnippet: 'Sync at 3:00 PM • Room ready',
-                onTap: () => onNavigateToTab?.call(1),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Card 2: Chats
-              _buildAppCard(
-                context: context,
-                icon: Icons.chat_bubble_rounded,
-                title: 'Chats',
-                description: 'Connect through individual and group conversations.',
-                badgeText: null,
-                badgeColor: null,
-                infoSnippet: 'No active conversations',
-                onTap: () => onNavigateToTab?.call(2),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Card 3: Mails
-              _buildAppCard(
-                context: context,
-                icon: Icons.mail_rounded,
-                title: 'Mails',
-                description: 'Send, receive and manage your emails.',
-                badgeText: '2 UNREAD',
-                badgeColor: AppTheme.accentCoral,
-                infoSnippet: _connektEmail,
-                onTap: () => onNavigateToTab?.call(3),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Card 4: Social
-              _buildAppCard(
-                context: context,
-                icon: Icons.public_rounded,
-                title: 'Social',
-                description: 'Social feed, professional network, jobs and communities.',
-                badgeText: 'NEW',
-                badgeColor: AppTheme.brandBlue,
-                infoSnippet: 'Social • Professional • Community',
-                onTap: () => onNavigateToTab?.call(4),
-              ),
-
-              const SizedBox(height: 28),
-
-              // Bottom subtle security / workspace pill
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.bgCard.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.05),
+              child: Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: Colors.white.withValues(alpha: 0.95),
+                      size: 25,
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.shield_outlined, size: 14, color: AppTheme.accentBlue),
-                      const SizedBox(width: 6),
-                      Text(
-                        'CONNEKT Unified Workspace • Session Active',
+                    const Positioned(
+                      top: 10,
+                      child: Text(
+                        'A文',
                         style: TextStyle(
-                          color: AppTheme.textMuted.withValues(alpha: 0.8),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopWidgetsSection(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // LEFT COLUMN: "Scheduler" Card with Calendar Preview
+          Expanded(
+            flex: 11,
+            child: _buildSchedulerCard(context),
+          ),
+          const SizedBox(width: 10),
+          // RIGHT COLUMN: 3 Stacked Widgets (World Clock, Reminder, Quick Notes)
+          Expanded(
+            flex: 10,
+            child: Column(
+              children: [
+                _buildWorldClockCard(context),
+                const SizedBox(height: 8),
+                _buildReminderCard(context),
+                const SizedBox(height: 8),
+                _buildQuickNotesCard(context),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSchedulerCard(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (ctx) => CalendarSchedulerScreen(
+              user: widget.user,
+              onOpenMeetings: () {
+                widget.onNavigateToTab?.call(1);
+              },
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8EFF9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFD6E2F2), width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Schedule',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Miniature Calendar Graphic (Aug / Current month representation)
+            Expanded(
+              child: Center(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAvatarFallback() {
-    final initial = _displayName.isNotEmpty ? _displayName[0].toUpperCase() : 'C';
-    return Container(
-      color: AppTheme.accentBlue.withValues(alpha: 0.2),
-      child: Center(
-        child: Text(
-          initial,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAppCard({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String description,
-    String? badgeText,
-    Color? badgeColor,
-    required String infoSnippet,
-    required VoidCallback onTap,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Material(
-      color: isDark ? const Color(0xFF13192B) : Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: AppTheme.brandBlue.withValues(alpha: 0.1),
-        highlightColor: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? const Color(0xFF1F293D) : const Color(0xFFE2E8F0),
-              width: 1,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Left Icon Box
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppTheme.brandBlue.withValues(alpha: isDark ? 0.15 : 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.brandBlue.withValues(alpha: 0.22),
-                      width: 1,
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      icon,
-                      color: AppTheme.brandBlue,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-
-                // Middle Text & Badge Section
-                Expanded(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Spiral Binding Dots Representation
                       Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isDark ? Colors.white : AppTheme.textPrimaryLight,
-                                fontSize: 16.5,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.1,
-                              ),
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(
+                          10,
+                          (i) => Container(
+                            width: 3.5,
+                            height: 3.5,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF94A3B8),
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          if (badgeText != null && badgeText.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            // Subtle Notification / Status Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: (badgeColor ?? AppTheme.brandBlue).withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: (badgeColor ?? AppTheme.brandBlue).withValues(alpha: 0.35),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                badgeText,
-                                style: TextStyle(
-                                  color: badgeColor ?? AppTheme.brandBlue,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
-                          fontSize: 12.5,
-                          height: 1.35,
                         ),
                       ),
                       const SizedBox(height: 6),
-                      // Extra contextual indicator (e.g. meeting time, email handle)
-                      Row(
+                      // Month / Year Header
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(
-                            Icons.circle,
-                            size: 6,
-                            color: badgeColor ?? AppTheme.brandBlue,
+                          Text(
+                            '8',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
                           ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              infoSnippet,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isDark
-                                    ? AppTheme.textMuted.withValues(alpha: 0.9)
-                                    : AppTheme.textMutedLight,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                          Text(
+                            'Aug 2026',
+                            style: TextStyle(fontSize: 8.5, color: Color(0xFF64748B)),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 4),
+                      // Day headers: S M T W T F S
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Text('S', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                          Text('M', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                          Text('T', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                          Text('W', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                          Text('T', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                          Text('F', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                          Text('S', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      // Mini calendar grid
+                      Expanded(
+                        child: _buildMiniCalendarGrid(),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                // Right Clickable Arrow Indicator
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.04)
-                        : Colors.black.withValues(alpha: 0.04),
-                    shape: BoxShape.circle,
+  Widget _buildMiniCalendarGrid() {
+    // 5 rows representing calendar dates with realistic highlights
+    final grid = [
+      [' ', ' ', ' ', '1', '2', '3', '4'],
+      ['5', '6', '7', '8', '9', '10', '11'],
+      ['12', '13', '14', '15', '16', '17', '18'],
+      ['19', '20', '21', '22', '23', '24', '25'],
+      ['26', '27', '28', '29', '30', '31', ' '],
+    ];
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: grid.map((row) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: row.map((date) {
+            final isHighlightRed = date == '8' || date == '21';
+            final isHighlightBlue = date == '14';
+
+            return Container(
+              width: 14,
+              height: 14,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isHighlightRed
+                    ? const Color(0xFFE53935).withValues(alpha: 0.18)
+                    : (isHighlightBlue ? const Color(0xFF4C85E6).withValues(alpha: 0.2) : Colors.transparent),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Text(
+                date,
+                style: TextStyle(
+                  fontSize: 7.5,
+                  fontWeight: (isHighlightRed || isHighlightBlue) ? FontWeight.bold : FontWeight.w500,
+                  color: isHighlightRed
+                      ? const Color(0xFFE53935)
+                      : (isHighlightBlue ? const Color(0xFF0F3B82) : const Color(0xFF334155)),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildWorldClockCard(BuildContext context) {
+    return InkWell(
+      onTap: () => _showWorldClockSheet(context),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8EFF9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD6E2F2), width: 1),
+        ),
+        child: Row(
+          children: [
+            // Analog Clock Icon Representation
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF334155), width: 1.4),
+                color: Colors.white,
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.access_time_filled,
+                  size: 14,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'World Clock',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReminderCard(BuildContext context) {
+    return InkWell(
+      onTap: () => _showRemindersSheet(context),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8EFF9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD6E2F2), width: 1),
+        ),
+        child: Row(
+          children: [
+            // Checklist Icon
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: const Icon(
+                Icons.checklist_rounded,
+                size: 16,
+                color: Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Reminder',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ),
+            // Notification Badge
+            if (_activeReminderCount > 0)
+              Container(
+                width: 18,
+                height: 18,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE53935),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '$_activeReminderCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  child: Center(
-                    child: Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      color: isDark ? AppTheme.textMuted : AppTheme.textMutedLight,
-                      size: 13,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickNotesCard(BuildContext context) {
+    return InkWell(
+      onTap: () => _showQuickNotesSheet(context),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF08A), // Soft yellow sticky note
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Text(
+            'Quick Notes',
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              fontStyle: FontStyle.italic,
+              fontFamily: 'Caveat',
+              color: Color(0xFF713F12),
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnektUserCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFEAF1FB),
+            Color(0xFFF7FAFD),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD6E2F2), width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Left Column: Brand Emblem + Email + Switch
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // CONNEKT Brandmark
+                Row(
+                  children: [
+                    Image.asset(
+                      'assets/icons/connekt_emblem.png',
+                      width: 24,
+                      height: 24,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.change_circle_rounded,
+                        color: Color(0xFFE53935),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    RichText(
+                      text: const TextSpan(
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                          fontFamily: 'Roboto',
+                        ),
+                        children: [
+                          TextSpan(text: 'CONN', style: TextStyle(color: Color(0xFF0F3B82))),
+                          TextSpan(text: 'E', style: TextStyle(color: Color(0xFFE53935))),
+                          TextSpan(text: 'KT', style: TextStyle(color: Color(0xFF0F3B82))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 1),
+                const Text(
+                  'CONNECTING THE UNCONNECTED',
+                  style: TextStyle(
+                    fontSize: 6.8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // User Email
+                Text(
+                  _connektEmail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Switch: "Switch to Professional"
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Transform.scale(
+                      scale: 0.72,
+                      alignment: Alignment.centerLeft,
+                      child: Switch(
+                        value: _isProfessional,
+                        activeThumbImage: null,
+                        activeColor: const Color(0xFF0F3B82),
+                        activeTrackColor: const Color(0xFF0F3B82).withValues(alpha: 0.35),
+                        onChanged: _toggleProfessionalMode,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        _isProfessional ? 'Professional' : 'Switch to Professional',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Right Column: Two Stacked Pill Buttons ("Your Profile" & "Invite Friends")
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. "Your Profile" Pill Button (Coral-red)
+              InkWell(
+                onTap: () => widget.onNavigateToTab?.call(5), // Profile Tab
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 128,
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE54D4D), Color(0xFFDC2626)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFDC2626).withValues(alpha: 0.25),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_outline_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text(
+                          'Your Profile',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      // Active Indicator Dot
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF22C55E),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // 2. "Invite Friends" Pill Button (Blue)
+              InkWell(
+                onTap: () => _showInviteFriendsSheet(context),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 128,
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4C85E6), Color(0xFF2563EB)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.people_alt_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Invite Friends',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainActionCard({
+    required IconData icon,
+    required String title,
+    required int badgeCount,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 62,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFD1D5DB), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Dark Navy Icon
+            Icon(
+              icon,
+              color: const Color(0xFF1E3A8A),
+              size: 28,
+            ),
+            const SizedBox(width: 18),
+            // Title
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ),
+            // Red Notification Badge if count > 0
+            if (badgeCount > 0)
+              Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE53935),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    badgeCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVibeBanner(BuildContext context) {
+    return InkWell(
+      onTap: () => widget.onNavigateToTab?.call(4), // Social / Vibe tab
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: double.infinity,
+        child: AspectRatio(
+          aspectRatio: 472 / 157,
+          child: Image.asset(
+            'assets/images/vibe_banner.png',
+            width: double.infinity,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _buildFallbackVibeBanner(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallbackVibeBanner() {
+    return Container(
+      width: double.infinity,
+      height: 105,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0A192F), Color(0xFF1E3A8A)],
+        ),
+      ),
+      child: const Row(
+        children: [
+          Text(
+            'vibe',
+            style: TextStyle(
+              fontSize: 38,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFEF4444),
+              letterSpacing: 1.5,
+            ),
+          ),
+          Spacer(),
+          Icon(Icons.sensors_rounded, color: Colors.white54, size: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // 1. Profile Icon
+          IconButton(
+            icon: const Icon(Icons.person_outline_rounded, color: Color(0xFF475569), size: 26),
+            tooltip: 'Profile',
+            onPressed: () => widget.onNavigateToTab?.call(5),
+          ),
+          // 2. Notification Bell Icon with Badge Dot
+          IconButton(
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications_none_rounded, color: Color(0xFF475569), size: 26),
+                Positioned(
+                  right: 2,
+                  top: 2,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE53935),
+                      shape: BoxShape.circle,
                     ),
                   ),
                 ),
               ],
             ),
+            tooltip: 'Notifications',
+            onPressed: () => _showNotificationsSheet(context),
           ),
+          // 3. Vibe / Social Icon
+          IconButton(
+            icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Color(0xFF475569), size: 26),
+            tooltip: 'Vibe Feed',
+            onPressed: () => widget.onNavigateToTab?.call(4),
+          ),
+          // 4. Hamburger Menu Icon
+          IconButton(
+            icon: const Icon(Icons.menu_rounded, color: Color(0xFF475569), size: 26),
+            tooltip: 'Menu',
+            onPressed: () => _showMenuSheet(context),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InviteContactsSheetContent extends StatefulWidget {
+  final String inviteLink;
+  final UserModel? user;
+
+  const _InviteContactsSheetContent({
+    required this.inviteLink,
+    required this.user,
+  });
+
+  @override
+  State<_InviteContactsSheetContent> createState() => _InviteContactsSheetContentState();
+}
+
+class _InviteContactsSheetContentState extends State<_InviteContactsSheetContent> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = true;
+  bool _permissionDenied = false;
+  List<Map<String, dynamic>> _allContacts = [];
+  String _searchQuery = '';
+  final Set<String> _invitedPhones = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContacts();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadContacts({bool requestPerm = true}) async {
+    setState(() {
+      _isLoading = true;
+      _permissionDenied = false;
+    });
+
+    List<Map<String, dynamic>> deviceContacts = [];
+    try {
+      deviceContacts = await CallLogService.fetchDeviceContacts(
+        limit: 250,
+        requestIfNeeded: requestPerm,
+      );
+      if (CallLogService.lastContactsPermissionGranted == false) {
+        _permissionDenied = true;
+      }
+    } catch (_) {}
+
+    List<Map<String, dynamic>> connektContacts = [];
+    try {
+      connektContacts = await ApiService.getContacts();
+    } catch (_) {}
+
+    final merged = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    for (final c in deviceContacts) {
+      final phone = (c['phone'] ?? '').toString().trim();
+      final name = (c['name'] ?? c['full_name'] ?? phone).toString().trim();
+      if (name.isEmpty && phone.isEmpty) continue;
+      final key = phone.isNotEmpty ? phone : name;
+      if (seen.add(key)) {
+        merged.add({
+          'name': name.isNotEmpty ? name : phone,
+          'phone': phone,
+          'is_connekt': false,
+        });
+      }
+    }
+
+    for (final c in connektContacts) {
+      final name = (c['name'] ?? c['username'] ?? '').toString().trim();
+      final phone = (c['phone'] ?? '').toString().trim();
+      final key = phone.isNotEmpty ? phone : name;
+      if (seen.add(key)) {
+        merged.insert(0, {
+          'name': name.isNotEmpty ? name : phone,
+          'phone': phone,
+          'is_connekt': true,
+        });
+      }
+    }
+
+    if (merged.isEmpty) {
+      merged.addAll([
+        {'name': 'Rahul Verma', 'phone': '+91 98368 12345', 'is_connekt': false},
+        {'name': 'Priya Sen', 'phone': '+91 98301 23456', 'is_connekt': false},
+        {'name': 'Alex Johnson', 'phone': '+91 98312 34567', 'is_connekt': false},
+        {'name': 'Ananya Podder', 'phone': '+91 98323 45678', 'is_connekt': false},
+        {'name': 'Subrata Roy', 'phone': '+91 98334 56789', 'is_connekt': false},
+        {'name': 'Tanvi Sharma', 'phone': '+91 98345 67890', 'is_connekt': false},
+      ]);
+    }
+
+    if (mounted) {
+      setState(() {
+        _allContacts = merged;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _inviteContact(String name, String phone) async {
+    final inviteMsg = 'Hey! Join me on CONNEKT: Connect the unconnected.\nDownload & join here: ${widget.inviteLink}';
+
+    bool opened = false;
+    if (phone.isNotEmpty) {
+      try {
+        opened = await CallLogService.openSmsInvite(
+          phone: phone,
+          message: inviteMsg,
+        );
+      } catch (_) {}
+    }
+
+    await Clipboard.setData(ClipboardData(text: inviteMsg));
+
+    if (mounted) {
+      setState(() {
+        _invitedPhones.add(phone.isNotEmpty ? phone : name);
+      });
+      HapticFeedback.lightImpact();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            opened
+                ? 'SMS composer opened for $name ($phone)'
+                : 'Invite link copied! Share with $name ($phone)',
+          ),
+          backgroundColor: const Color(0xFF0F3B82),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  Color _getAvatarColor(String name) {
+    const colors = [
+      Color(0xFF3B82F6),
+      Color(0xFF8B5CF6),
+      Color(0xFF10B981),
+      Color(0xFFF97316),
+      Color(0xFF06B6D4),
+      Color(0xFFEC4899),
+    ];
+    return colors[name.hashCode.abs() % colors.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _searchQuery.isEmpty
+        ? _allContacts
+        : _allContacts.where((c) {
+            final name = (c['name'] ?? '').toString().toLowerCase();
+            final phone = (c['phone'] ?? '').toString().toLowerCase();
+            return name.contains(_searchQuery) || phone.contains(_searchQuery);
+          }).toList();
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Header Row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8EFF9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.contacts_rounded, color: Color(0xFF0F3B82), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Contact to Invite',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F1E36),
+                          ),
+                        ),
+                        Text(
+                          'Send CONNEKT invite link directly via SMS',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 22, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val.trim().toLowerCase();
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search contacts by name or phone...',
+                  hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF94A3B8)),
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF0F3B82)),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFF1F5F9),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Quick Copy Link Banner
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: InkWell(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: widget.inviteLink));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Invite link copied! Share via WhatsApp or any app.')),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.link_rounded, color: Color(0xFF2563EB), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.inviteLink,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Copy',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Contacts List
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF0F3B82)),
+                    )
+                  : filtered.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.person_off_rounded, size: 40, color: Color(0xFF94A3B8)),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _searchQuery.isNotEmpty
+                                      ? 'No contacts matching "$_searchQuery"'
+                                      : 'No contacts found on device',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                                ),
+                                if (_permissionDenied) ...[
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Contacts permission is needed to view phone contacts.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ElevatedButton(
+                                    onPressed: () => _loadContacts(requestPerm: true),
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F3B82)),
+                                    child: const Text('Grant Permission', style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                          itemBuilder: (ctx, index) {
+                            final contact = filtered[index];
+                            final name = (contact['name'] ?? 'Contact').toString();
+                            final phone = (contact['phone'] ?? '').toString();
+                            final isConnekt = contact['is_connekt'] == true;
+                            final isInvited = _invitedPhones.contains(phone.isNotEmpty ? phone : name);
+
+                            final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: _getAvatarColor(name),
+                                    child: Text(
+                                      initial,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 14.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFF0F1E36),
+                                                ),
+                                              ),
+                                            ),
+                                            if (isConnekt) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFDCFCE7),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: const Text(
+                                                  'CONNEKT',
+                                                  style: TextStyle(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Color(0xFF15803D),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          phone.isNotEmpty ? phone : 'Phone contact',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(
+                                    onPressed: isInvited ? null : () => _inviteContact(name, phone),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: isInvited ? const Color(0xFF22C55E) : const Color(0xFF0F3B82),
+                                      disabledBackgroundColor: const Color(0xFF22C55E),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          isInvited ? Icons.check_rounded : Icons.sms_rounded,
+                                          size: 14,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          isInvited ? 'Invited' : 'Invite',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
         ),
       ),
     );

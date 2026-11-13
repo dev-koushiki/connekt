@@ -8,13 +8,16 @@ class ApiConfig {
   static const String _hostKey = 'connekt_server_host';
 
   // PC's current detected Wi-Fi IP address
-  static String defaultHost = '192.168.161.196:5000';
+  static String defaultHost = '192.168.29.98:5000';
   static String currentHost = defaultHost;
   static Future<String?>? _inFlightDetect;
 
   // Stale or deprecated development IPs/tunnels to automatically prune
   static const List<String> staleHosts = [
+    '192.168.161.196:5000',
     '10.161.165.196:5000',
+    'https://fifty-heads-train.loca.lt',
+    'https://silver-geckos-warn.loca.lt',
     'https://plain-spiders-tease.loca.lt',
     'https://plain-clouds-take.loca.lt',
     'https://swift-hoops-trade.loca.lt',
@@ -24,13 +27,12 @@ class ApiConfig {
 
   // Common network IPs and cloud tunnels tested during auto-detection
   static const List<String> candidateHosts = [
-    '192.168.161.196:5000',             // Current Wi-Fi IP
+    'https://connekt-api-live.loca.lt',  // Active Cloud Tunnel (works anywhere on 5G / 4G Mobile Data)
+    '192.168.29.98:5000',               // Current Wi-Fi IP
     'localhost:5000',                   // USB Cable reverse mode (adb reverse tcp:5000 tcp:5000)
     '127.0.0.1:5000',
-    'https://fifty-heads-train.loca.lt', // Active Cloud Tunnel (5G / 4G Mobile Data)
-    'https://silver-geckos-warn.loca.lt',
-    '192.168.29.98:5000',               // Previous Wi-Fi IP
-    '192.168.188.196:5000',             // Previous Wi-Fi IP
+    '192.168.161.196:5000',
+    '192.168.188.196:5000',
     '192.168.1.15:5000',
     '192.168.1.5:5000',
     '192.168.0.100:5000',
