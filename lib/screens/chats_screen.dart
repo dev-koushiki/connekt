@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -2498,11 +2499,33 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                               Builder(
                                                 builder: (_) {
                                                   final rawLast = (conv['lastMessage'] ?? '').toString().trim();
-                                                  final displayLast = (rawLast == 'This message was deleted' ||
-                                                          rawLast == 'You deleted this message' ||
-                                                          rawLast == 'Conversation started')
+                                                  String formatted = rawLast;
+                                                  if (rawLast.startsWith('{') && rawLast.endsWith('}')) {
+                                                    try {
+                                                      final data = jsonDecode(rawLast);
+                                                      final type = data['type'];
+                                                      if (type == 'sticker') {
+                                                        formatted = '💟 Sticker';
+                                                      } else if (type == 'image') {
+                                                        formatted = '📷 Photo';
+                                                      } else if (type == 'voice') {
+                                                        formatted = '🎤 Voice message';
+                                                      } else if (type == 'audio') {
+                                                        formatted = '🎵 Audio';
+                                                      } else if (type == 'file') {
+                                                        formatted = '📄 Document';
+                                                      } else if (type == 'location') {
+                                                        formatted = '📍 Location';
+                                                      } else if (type == 'contact') {
+                                                        formatted = '👤 Contact';
+                                                      }
+                                                    } catch (_) {}
+                                                  }
+                                                  final displayLast = (formatted == 'This message was deleted' ||
+                                                          formatted == 'You deleted this message' ||
+                                                          formatted == 'Conversation started')
                                                       ? ''
-                                                      : rawLast;
+                                                      : formatted;
                                                   return Row(
                                                     children: [
                                                       // WhatsApp Status Ticks (✓✓) only when a message exists

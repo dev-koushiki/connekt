@@ -12,6 +12,7 @@ import '../services/api_service.dart';
 import '../services/voice_audio_service.dart';
 import '../widgets/safe_avatar.dart';
 import '../widgets/translatable_text_widget.dart';
+import '../widgets/whatsapp_emoji_sticker_picker.dart';
 
 class ChatScreen extends StatefulWidget {
   final String contactName;
@@ -86,11 +87,20 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   bool _isFavourite = false;
   bool _hasLeftGroup = false;
 
+  // WhatsApp Emoji & Sticker picker state
+  bool _showEmojiPicker = false;
+  final FocusNode _focusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
     _groupMembers = List.from(widget.initialMembers);
     _groupDescription = widget.groupDescription;
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus && _showEmojiPicker) {
+        setState(() => _showEmojiPicker = false);
+      }
+    });
     _loadHistory();
     if (!isFlutterTestEnv) {
       _syncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
@@ -103,6 +113,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   void dispose() {
     _syncTimer?.cancel();
     _msgController.dispose();
+    _focusNode.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     _recordTimer?.cancel();
@@ -474,6 +485,83 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   }
 
   // ====================================================================
+  // WHATSAPP EMOJI & STICKER ACTIONS
+  // ====================================================================
+
+  void _toggleEmojiPicker() {
+    if (_showEmojiPicker) {
+      setState(() => _showEmojiPicker = false);
+      _focusNode.requestFocus();
+    } else {
+      FocusScope.of(context).unfocus();
+      setState(() => _showEmojiPicker = true);
+    }
+  }
+
+  void _onEmojiSelected(String emoji) {
+    final text = _msgController.text;
+    final selection = _msgController.selection;
+    if (selection.start >= 0 && selection.end >= 0) {
+      final newText = text.replaceRange(selection.start, selection.end, emoji);
+      final newOffset = selection.start + emoji.length;
+      _msgController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newOffset),
+      );
+    } else {
+      _msgController.text = text + emoji;
+      _msgController.selection = TextSelection.collapsed(offset: _msgController.text.length);
+    }
+  }
+
+  void _onEmojiBackspace() {
+    final text = _msgController.text;
+    final textSelection = _msgController.selection;
+    final selectionLength = textSelection.end - textSelection.start;
+
+    if (selectionLength > 0) {
+      final newText = text.replaceRange(textSelection.start, textSelection.end, '');
+      _msgController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: textSelection.start),
+      );
+      return;
+    }
+
+    if (textSelection.start <= 0) return;
+
+    final runes = text.runes.toList();
+    if (runes.isNotEmpty) {
+      runes.removeLast();
+      final newString = String.fromCharCodes(runes);
+      _msgController.value = TextEditingValue(
+        text: newString,
+        selection: TextSelection.collapsed(offset: newString.length),
+      );
+    }
+  }
+
+  void _onStickerSelected(WhatsAppStickerItem sticker) {
+    _sendRichMessage({
+      'type': 'sticker',
+      'sticker': sticker.emoji,
+      'title': sticker.title,
+      'pack': sticker.pack,
+    });
+  }
+
+  bool _isSticker(Map<String, dynamic> msg) {
+    final rawText = (msg['text'] ?? '').toString();
+    if (rawText.startsWith('{') && rawText.endsWith('}')) {
+      try {
+        final data = jsonDecode(rawText);
+        return data['type'] == 'sticker';
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  // ====================================================================
   // MICROPHONE (VOICE NOTE RECORDING & PLAYBACK)
   // ====================================================================
 
@@ -748,24 +836,24 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                 // Drag handle
                 Center(
                   child: Container(
-                    width: 40,
+                    width: 44,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.black12,
+                      color: isDark ? const Color(0xFF475569) : Colors.black26,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
-                // 2 Rows x 3 Columns WhatsApp Attachment Grid
+                // 2 Rows x 3 Columns WhatsApp Attachment Grid (Document, Camera, Gallery, Audio, Location, Contact)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildAttachmentItem(
                       icon: Icons.insert_drive_file_rounded,
                       label: 'Document',
-                      gradient: const [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                      color: const Color(0xFF7F3DFF),
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickDocument();
@@ -775,7 +863,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     _buildAttachmentItem(
                       icon: Icons.camera_alt_rounded,
                       label: 'Camera',
-                      gradient: const [Color(0xFFEC4899), Color(0xFFBE185D)],
+                      color: const Color(0xFFE91E63),
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickImage(ImageSource.camera);
@@ -785,7 +873,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     _buildAttachmentItem(
                       icon: Icons.photo_library_rounded,
                       label: 'Gallery',
-                      gradient: const [Color(0xFF6366F1), Color(0xFF4338CA)],
+                      color: const Color(0xFF5B51D8),
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickImage(ImageSource.gallery);
@@ -794,14 +882,14 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildAttachmentItem(
                       icon: Icons.headphones_rounded,
                       label: 'Audio',
-                      gradient: const [Color(0xFFF59E0B), Color(0xFFD97706)],
+                      color: const Color(0xFFF58A07),
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickAudio();
@@ -811,7 +899,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     _buildAttachmentItem(
                       icon: Icons.location_on_rounded,
                       label: 'Location',
-                      gradient: const [Color(0xFF10B981), Color(0xFF047857)],
+                      color: const Color(0xFF00A86B),
                       onTap: () {
                         Navigator.pop(ctx);
                         _sendLocation();
@@ -821,7 +909,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     _buildAttachmentItem(
                       icon: Icons.person_rounded,
                       label: 'Contact',
-                      gradient: const [Color(0xFF007AFF), Color(0xFF0051B3)],
+                      color: const Color(0xFF0084FF),
                       onTap: () {
                         Navigator.pop(ctx);
                         _sendContact();
@@ -841,7 +929,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   Widget _buildAttachmentItem({
     required IconData icon,
     required String label,
-    required List<Color> gradient,
+    required Color color,
     required VoidCallback onTap,
     required Color textColor,
   }) {
@@ -851,30 +939,27 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 58,
-            height: 58,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: gradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: color,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: gradient.first.withValues(alpha: 0.35),
-                  blurRadius: 10,
+                  color: color.withValues(alpha: 0.55),
+                  blurRadius: 18,
+                  spreadRadius: 1,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: Icon(icon, color: Colors.white, size: 28),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               color: textColor,
             ),
@@ -1328,6 +1413,61 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
             ],
           );
         }
+
+        // 6. STICKER BUBBLE (WhatsApp style)
+        if (type == 'sticker') {
+          final stickerEmoji = (data['sticker'] ?? '🌟').toString();
+          final title = (data['title'] ?? '').toString();
+
+          return Container(
+            constraints: const BoxConstraints(minWidth: 110, maxWidth: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Text(
+                    stickerEmoji,
+                    style: const TextStyle(fontSize: 64, height: 1.1),
+                  ),
+                ),
+                if (title.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : const Color(0xFF1E293B),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
       } catch (_) {}
     }
 
@@ -1426,7 +1566,14 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     final inputBg = isDark ? AppTheme.bgInput : const Color(0xFFF1F5F9);
     final borderColor = isDark ? const Color(0xFF1E283D) : const Color(0xFFE2E8F0);
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_showEmojiPicker,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _showEmojiPicker) {
+          setState(() => _showEmojiPicker = false);
+        }
+      },
+      child: Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: bgColor,
@@ -1730,110 +1877,124 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final msg = _messages[index];
+                    : GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+                          FocusScope.of(context).unfocus();
+                        },
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, index) {
+                            final msg = _messages[index];
 
-                          // System Message Capsule (e.g. Disappearing Messages notice)
-                          if (msg['isSystem'] == true) {
-                            return Center(
+                            // System Message Capsule (e.g. Disappearing Messages notice)
+                            if (msg['isSystem'] == true) {
+                              return Center(
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0xFF1E283D) : const Color(0xFFE2E8F0),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    msg['text'] ?? '',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: subtextColor, fontSize: 12),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final isMe = msg['isMe'] == true;
+                            final msgId = (msg['id'] ?? index.toString()).toString();
+                            final isSelected = _selectedMsgIds.contains(msgId);
+                            final isSticker = _isSticker(msg);
+
+                            return GestureDetector(
+                              onTap: _isSelectionMode
+                                  ? () {
+                                      setState(() {
+                                        if (isSelected) {
+                                          _selectedMsgIds.remove(msgId);
+                                          if (_selectedMsgIds.isEmpty) _isSelectionMode = false;
+                                        } else {
+                                          _selectedMsgIds.add(msgId);
+                                        }
+                                      });
+                                    }
+                                  : null,
+                              onLongPress: () {
+                                _showMessageActionSheet(msg, msgId);
+                              },
                               child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: _isSelectionMode ? const EdgeInsets.symmetric(vertical: 4) : EdgeInsets.zero,
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF1E283D) : const Color(0xFFE2E8F0),
+                                  color: isSelected ? AppTheme.brandBlue.withValues(alpha: 0.15) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Text(
-                                  msg['text'] ?? '',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: subtextColor, fontSize: 12),
-                                ),
-                              ),
-                            );
-                          }
-
-                          final isMe = msg['isMe'] == true;
-                          final msgId = (msg['id'] ?? index.toString()).toString();
-                          final isSelected = _selectedMsgIds.contains(msgId);
-
-                          return GestureDetector(
-                            onTap: _isSelectionMode
-                                ? () {
-                                    setState(() {
-                                      if (isSelected) {
-                                        _selectedMsgIds.remove(msgId);
-                                        if (_selectedMsgIds.isEmpty) _isSelectionMode = false;
-                                      } else {
-                                        _selectedMsgIds.add(msgId);
-                                      }
-                                    });
-                                  }
-                                : null,
-                            onLongPress: () {
-                              _showMessageActionSheet(msg, msgId);
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: _isSelectionMode ? const EdgeInsets.symmetric(vertical: 4) : EdgeInsets.zero,
-                              decoration: BoxDecoration(
-                                color: isSelected ? AppTheme.brandBlue.withValues(alpha: 0.15) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  if (_isSelectionMode && !isMe) ...[
-                                    Icon(
-                                      isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                      color: isSelected ? AppTheme.brandBlue : subtextColor,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  Column(
-                                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                    children: [
-                                      if (widget.isGroup && !isMe)
-                                        Padding(
-                                          padding: const EdgeInsets.only(left: 4, bottom: 3),
-                                          child: Text(
-                                            (msg['sender'] ?? 'Member').toString(),
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: Color(0xFF6366F1),
+                                child: Row(
+                                  mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    if (_isSelectionMode && !isMe) ...[
+                                      Icon(
+                                        isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                        color: isSelected ? AppTheme.brandBlue : subtextColor,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    Column(
+                                      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                      children: [
+                                        if (widget.isGroup && !isMe)
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 4, bottom: 3),
+                                            child: Text(
+                                              (msg['sender'] ?? 'Member').toString(),
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF6366F1),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      Container(
-                                        constraints: BoxConstraints(
-                                          maxWidth: MediaQuery.of(context).size.width * 0.74,
-                                        ),
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                        Container(
+                                          constraints: BoxConstraints(
+                                            maxWidth: MediaQuery.of(context).size.width * 0.74,
+                                          ),
+                                          padding: isSticker
+                                              ? const EdgeInsets.symmetric(horizontal: 4, vertical: 4)
+                                              : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                           decoration: BoxDecoration(
-                                            color: isMe
-                                                ? AppTheme.brandBlue
-                                                : (isDark ? cardColor : const Color(0xFFF1F5F9)),
+                                            color: isSticker
+                                                ? Colors.transparent
+                                                : (isMe
+                                                    ? AppTheme.brandBlue
+                                                    : (isDark ? cardColor : const Color(0xFFF1F5F9))),
                                             borderRadius: BorderRadius.only(
                                               topLeft: const Radius.circular(18),
                                               topRight: const Radius.circular(18),
                                               bottomLeft: Radius.circular(isMe ? 18 : 4),
                                               bottomRight: Radius.circular(isMe ? 4 : 18),
                                             ),
-                                            boxShadow: isMe
-                                                ? [
-                                                    BoxShadow(
-                                                      color: AppTheme.brandBlue.withValues(alpha: 0.22),
-                                                      blurRadius: 8,
-                                                      offset: const Offset(0, 3),
-                                                    ),
-                                                  ]
-                                                : null,
+                                            boxShadow: isSticker
+                                                ? null
+                                                : (isMe
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: AppTheme.brandBlue.withValues(alpha: 0.22),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(0, 3),
+                                                        ),
+                                                      ]
+                                                    : null),
                                           ),
                                           child: _buildMessageContent(msg, isMe, textColor, subtextColor, isDark),
                                         ),
@@ -1857,21 +2018,22 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                                             ],
                                           ],
                                         ),
-                                    ],
-                                  ),
-                                  if (_isSelectionMode && isMe) ...[
-                                    const SizedBox(width: 8),
-                                    Icon(
-                                      isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                      color: isSelected ? AppTheme.brandBlue : subtextColor,
-                                      size: 20,
+                                      ],
                                     ),
+                                    if (_isSelectionMode && isMe) ...[
+                                      const SizedBox(width: 8),
+                                      Icon(
+                                        isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                        color: isSelected ? AppTheme.brandBlue : subtextColor,
+                                        size: 20,
+                                      ),
+                                    ],
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
           ),
 
@@ -1929,6 +2091,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
               ),
               child: SafeArea(
                 top: false,
+                bottom: !_showEmojiPicker,
                 child: _isPendingInvite
                     ? _buildPendingInviteBottomBar(isDark, textColor, subtextColor)
                     : (_isRecording
@@ -1936,9 +2099,16 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                         : _buildNormalInputBar(inputBg, borderColor, textColor, subtextColor)),
               ),
             ),
+          if (_showEmojiPicker)
+            WhatsAppEmojiStickerPicker(
+              onEmojiSelected: _onEmojiSelected,
+              onStickerSelected: _onStickerSelected,
+              onBackspace: _onEmojiBackspace,
+            ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   // Normal Input Bar with '+' attachment button, TextField, and Microphone button
@@ -1947,7 +2117,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       children: [
         // WhatsApp Attachment '+' Button
         GestureDetector(
-          onTap: () => _showAttachmentSheet(context),
+          onTap: () {
+            if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+            _showAttachmentSheet(context);
+          },
           child: Container(
             width: 42,
             height: 42,
@@ -1961,7 +2134,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         ),
         const SizedBox(width: 8),
 
-        // Text Field with inside Microphone Action
+        // Text Field with inside Emoji and Microphone Action
         Expanded(
           child: Container(
             height: 44,
@@ -1970,12 +2143,25 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: borderColor),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
               children: [
+                // WhatsApp Emoji / Keyboard toggle
+                IconButton(
+                  icon: Icon(
+                    _showEmojiPicker ? Icons.keyboard_alt_outlined : Icons.sentiment_satisfied_alt_outlined,
+                    color: _showEmojiPicker ? AppTheme.brandBlue : subtextColor,
+                    size: 24,
+                  ),
+                  tooltip: _showEmojiPicker ? 'Keyboard' : 'Emoji & Stickers',
+                  splashRadius: 20,
+                  onPressed: _toggleEmojiPicker,
+                ),
+
                 Expanded(
                   child: TextField(
                     controller: _msgController,
+                    focusNode: _focusNode,
                     style: TextStyle(color: textColor, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Chat...',
@@ -1985,6 +2171,11 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                       focusedBorder: InputBorder.none,
                       contentPadding: EdgeInsets.zero,
                     ),
+                    onTap: () {
+                      if (_showEmojiPicker) {
+                        setState(() => _showEmojiPicker = false);
+                      }
+                    },
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
@@ -2007,7 +2198,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
         // Send Button
         GestureDetector(
-          onTap: _sendMessage,
+          onTap: () {
+            if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+            _sendMessage();
+          },
           child: Container(
             width: 42,
             height: 42,
