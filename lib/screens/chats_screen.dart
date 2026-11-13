@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_theme.dart';
 import '../config/subnet_probe_stub.dart' if (dart.library.io) '../config/subnet_probe_io.dart';
 import '../models/user_model.dart';
@@ -42,7 +43,101 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   final List<Map<String, dynamic>> _conversations = [];
   final List<Map<String, dynamic>> _archivedConversations = [];
   final List<Map<String, dynamic>> _lockedConversations = [];
+  final Set<String> _lockedChatIds = {};
+  final Set<String> _archivedChatIds = {};
   bool _isLoading = false;
+
+  bool _isSameChat(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final aId = (a['id']?.toString() ?? '').trim();
+    final bId = (b['id']?.toString() ?? '').trim();
+    if (aId.isNotEmpty && bId.isNotEmpty && aId == bId) return true;
+
+    final aTarget = (a['target']?.toString() ?? '').trim();
+    final bTarget = (b['target']?.toString() ?? '').trim();
+    if (aTarget.isNotEmpty && bTarget.isNotEmpty && aTarget.toLowerCase() == bTarget.toLowerCase()) return true;
+
+    final aName = (a['name']?.toString() ?? '').trim();
+    final bName = (b['name']?.toString() ?? '').trim();
+    if (aName.isNotEmpty && bName.isNotEmpty && aName.toLowerCase() == bName.toLowerCase()) return true;
+
+    return false;
+  }
+
+  bool _isChatLocked(Map<String, dynamic> c) {
+    if (c['isLocked'] == true) return true;
+    final id = (c['id']?.toString() ?? '').trim();
+    if (id.isNotEmpty && _lockedChatIds.contains(id)) return true;
+    final target = (c['target']?.toString() ?? '').trim();
+    if (target.isNotEmpty && _lockedChatIds.contains(target)) return true;
+    final name = (c['name']?.toString() ?? '').trim();
+    if (name.isNotEmpty && _lockedChatIds.contains(name)) return true;
+    return _lockedConversations.any((lc) => _isSameChat(lc, c));
+  }
+
+  bool _isChatArchived(Map<String, dynamic> c) {
+    if (c['isArchived'] == true) return true;
+    final id = (c['id']?.toString() ?? '').trim();
+    if (id.isNotEmpty && _archivedChatIds.contains(id)) return true;
+    final target = (c['target']?.toString() ?? '').trim();
+    if (target.isNotEmpty && _archivedChatIds.contains(target)) return true;
+    final name = (c['name']?.toString() ?? '').trim();
+    if (name.isNotEmpty && _archivedChatIds.contains(name)) return true;
+    return _archivedConversations.any((ac) => _isSameChat(ac, c));
+  }
+
+  void _recordChatLocked(Map<String, dynamic> c) {
+    final id = (c['id']?.toString() ?? '').trim();
+    if (id.isNotEmpty) _lockedChatIds.add(id);
+    final target = (c['target']?.toString() ?? '').trim();
+    if (target.isNotEmpty) _lockedChatIds.add(target);
+    final name = (c['name']?.toString() ?? '').trim();
+    if (name.isNotEmpty) _lockedChatIds.add(name);
+  }
+
+  void _removeChatLocked(Map<String, dynamic> c) {
+    final id = (c['id']?.toString() ?? '').trim();
+    if (id.isNotEmpty) _lockedChatIds.remove(id);
+    final target = (c['target']?.toString() ?? '').trim();
+    if (target.isNotEmpty) _lockedChatIds.remove(target);
+    final name = (c['name']?.toString() ?? '').trim();
+    if (name.isNotEmpty) _lockedChatIds.remove(name);
+  }
+
+  void _recordChatArchived(Map<String, dynamic> c) {
+    final id = (c['id']?.toString() ?? '').trim();
+    if (id.isNotEmpty) _archivedChatIds.add(id);
+    final target = (c['target']?.toString() ?? '').trim();
+    if (target.isNotEmpty) _archivedChatIds.add(target);
+    final name = (c['name']?.toString() ?? '').trim();
+    if (name.isNotEmpty) _archivedChatIds.add(name);
+  }
+
+  void _removeChatArchived(Map<String, dynamic> c) {
+    final id = (c['id']?.toString() ?? '').trim();
+    if (id.isNotEmpty) _archivedChatIds.remove(id);
+    final target = (c['target']?.toString() ?? '').trim();
+    if (target.isNotEmpty) _archivedChatIds.remove(target);
+    final name = (c['name']?.toString() ?? '').trim();
+    if (name.isNotEmpty) _archivedChatIds.remove(name);
+  }
+
+  Future<void> _loadFolderState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final locked = prefs.getStringList('connekt_locked_chat_ids') ?? [];
+      final archived = prefs.getStringList('connekt_archived_chat_ids') ?? [];
+      _lockedChatIds.addAll(locked.where((s) => s.trim().isNotEmpty));
+      _archivedChatIds.addAll(archived.where((s) => s.trim().isNotEmpty));
+    } catch (_) {}
+  }
+
+  Future<void> _saveFolderState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('connekt_locked_chat_ids', _lockedChatIds.toList());
+      await prefs.setStringList('connekt_archived_chat_ids', _archivedChatIds.toList());
+    } catch (_) {}
+  }
 
   // WhatsApp Multi-selection mode
   bool _isSelectionMode = false;
@@ -76,7 +171,9 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       if (mounted) setState(() {});
     });
     CallLogService.syncNotifier.addListener(_onCallLogsSyncChanged);
-    _loadConversations();
+    _loadFolderState().then((_) {
+      if (mounted) _loadConversations();
+    });
     _loadCallLogs();
     if (!isFlutterTestEnv) {
       _convSyncTimer = Timer.periodic(const Duration(seconds: 6), (_) {
@@ -150,14 +247,62 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
 
   Future<void> _loadConversations() async {
     try {
-      final list = await ApiService.getConversations();
-      if (mounted) {
-        setState(() {
-          _conversations.clear();
-          _conversations.addAll(list);
-          _isLoading = false;
-        });
+      await _loadFolderState();
+      for (final lc in _lockedConversations) {
+        _recordChatLocked(lc);
       }
+      for (final ac in _archivedConversations) {
+        _recordChatArchived(ac);
+      }
+
+      final list = await ApiService.getConversations();
+      if (!mounted) return;
+
+      final List<Map<String, dynamic>> activeList = [];
+      final List<Map<String, dynamic>> newLocked = [];
+      final List<Map<String, dynamic>> newArchived = [];
+
+      for (final item in list) {
+        if (_isChatLocked(item)) {
+          item['isLocked'] = true;
+          _recordChatLocked(item);
+          newLocked.add(item);
+        } else if (_isChatArchived(item)) {
+          item['isArchived'] = true;
+          _recordChatArchived(item);
+          newArchived.add(item);
+        } else {
+          item['isLocked'] = false;
+          item['isArchived'] = false;
+          activeList.add(item);
+        }
+      }
+
+      for (final lc in _lockedConversations) {
+        if (!newLocked.any((nl) => _isSameChat(nl, lc))) {
+          newLocked.add(lc);
+        }
+      }
+      for (final ac in _archivedConversations) {
+        if (!newArchived.any((na) => _isSameChat(na, ac))) {
+          newArchived.add(ac);
+        }
+      }
+
+      setState(() {
+        _conversations
+          ..clear()
+          ..addAll(activeList);
+        _lockedConversations
+          ..clear()
+          ..addAll(newLocked);
+        _archivedConversations
+          ..clear()
+          ..addAll(newArchived);
+        _isLoading = false;
+      });
+
+      _saveFolderState();
     } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -166,7 +311,9 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   }
 
   int get totalUnreadChats =>
-      _conversations.fold<int>(0, (sum, item) => sum + ((item['unread'] as int?) ?? 0));
+      _conversations
+          .where((item) => !_isChatLocked(item) && !_isChatArchived(item))
+          .fold<int>(0, (sum, item) => sum + ((item['unread'] as int?) ?? 0));
 
   // ====================================================================
   // NAVIGATION & CHAT OPEN
@@ -332,17 +479,22 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void _archiveSelectedChats() {
     setState(() {
       final toArchive = _conversations.where((c) {
-        final id = c['id']?.toString() ?? c['name'];
-        return _selectedChatIds.contains(id);
+        final id = c['id']?.toString() ?? c['name']?.toString() ?? '';
+        final target = c['target']?.toString() ?? '';
+        return _selectedChatIds.contains(id) || (target.isNotEmpty && _selectedChatIds.contains(target));
       }).toList();
 
       for (final item in toArchive) {
         item['isArchived'] = true;
-        _archivedConversations.add(item);
-        _conversations.remove(item);
+        _recordChatArchived(item);
+        if (!_archivedConversations.any((ac) => _isSameChat(ac, item))) {
+          _archivedConversations.add(item);
+        }
+        _conversations.removeWhere((c) => _isSameChat(c, item));
       }
       _exitSelectionMode();
     });
+    _saveFolderState();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Chat(s) archived'),
@@ -366,21 +518,44 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void _lockSelectedChats() {
     setState(() {
       final toLock = _conversations.where((c) {
-        final id = c['id']?.toString() ?? c['name'];
-        return _selectedChatIds.contains(id);
+        final id = c['id']?.toString() ?? c['name']?.toString() ?? '';
+        final target = c['target']?.toString() ?? '';
+        return _selectedChatIds.contains(id) || (target.isNotEmpty && _selectedChatIds.contains(target));
       }).toList();
 
       for (final item in toLock) {
         item['isLocked'] = true;
-        _lockedConversations.add(item);
-        _conversations.remove(item);
+        _recordChatLocked(item);
+        if (!_lockedConversations.any((lc) => _isSameChat(lc, item))) {
+          _lockedConversations.add(item);
+        }
+        _conversations.removeWhere((c) => _isSameChat(c, item));
       }
       _exitSelectionMode();
     });
+    _saveFolderState();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Chat(s) moved to Locked Chats'),
         backgroundColor: Color(0xFF1D4ED8),
+      ),
+    );
+  }
+
+  void _lockSingleChat(Map<String, dynamic> conv) {
+    setState(() {
+      conv['isLocked'] = true;
+      _recordChatLocked(conv);
+      if (!_lockedConversations.any((lc) => _isSameChat(lc, conv))) {
+        _lockedConversations.add(conv);
+      }
+      _conversations.removeWhere((c) => _isSameChat(c, conv));
+    });
+    _saveFolderState();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${conv['name'] ?? 'Chat'} moved to Locked Chats'),
+        backgroundColor: const Color(0xFF1D4ED8),
       ),
     );
   }
@@ -456,10 +631,13 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
           archivedChats: _archivedConversations,
           onUnarchive: (chat) {
             setState(() {
-              _archivedConversations.removeWhere((c) => c['id'] == chat['id']);
+              _removeChatArchived(chat);
+              _archivedConversations.removeWhere((c) => _isSameChat(c, chat));
               chat['isArchived'] = false;
+              _conversations.removeWhere((c) => _isSameChat(c, chat));
               _conversations.insert(0, chat);
             });
+            _saveFolderState();
           },
         ),
       ),
@@ -473,10 +651,13 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
           lockedChats: _lockedConversations,
           onUnlockChat: (chat) {
             setState(() {
-              _lockedConversations.removeWhere((c) => c['id'] == chat['id']);
+              _removeChatLocked(chat);
+              _lockedConversations.removeWhere((c) => _isSameChat(c, chat));
               chat['isLocked'] = false;
+              _conversations.removeWhere((c) => _isSameChat(c, chat));
               _conversations.insert(0, chat);
             });
+            _saveFolderState();
           },
         ),
       ),
@@ -490,7 +671,6 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void _showAvatarQuickPreview(Map<String, dynamic> conv) {
     final name = (conv['name'] ?? 'Contact').toString();
     final avatar = (conv['avatar'] ?? '').toString();
-    final target = (conv['target'] ?? conv['phone'] ?? name).toString();
 
     showDialog(
       context: context,
@@ -570,7 +750,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                     tooltip: 'View Info',
                     onPressed: () {
                       Navigator.pop(ctx);
-                      _showContactInfoSheet(name, target, avatar);
+                      _showContactInfoSheet(conv);
                     },
                   ),
                 ],
@@ -596,7 +776,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     );
   }
 
-  void _showContactInfoSheet(String name, String phone, String avatar) {
+  void _showContactInfoSheet(Map<String, dynamic> conv) {
+    final name = (conv['name'] ?? 'Contact').toString();
+    final avatar = (conv['avatar'] ?? '').toString();
+    final phone = (conv['target'] ?? conv['phone'] ?? name).toString();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -622,7 +805,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat locked')));
+                _lockSingleChat(conv);
               },
             ),
             ListTile(
@@ -632,7 +815,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to favourites')));
+                setState(() => conv['isFavourite'] = !(conv['isFavourite'] == true));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(conv['isFavourite'] == true ? 'Added to favourites' : 'Removed from favourites')),
+                );
               },
             ),
           ],
@@ -1981,6 +2167,9 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     });
 
     final filteredList = sortedList.where((c) {
+      if (_isChatLocked(c)) return false;
+      if (_isChatArchived(c)) return false;
+
       final isGroup = c['isGroup'] == true || c['type'] == 'group';
       final unread = (c['unread'] as int?) ?? 0;
       final isFav = c['isFavourite'] == true;
@@ -2164,9 +2353,14 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                 } else {
                                   // Archive Chat
                                   setState(() {
-                                    _conversations.remove(conv);
-                                    _archivedConversations.add(conv);
+                                    conv['isArchived'] = true;
+                                    _recordChatArchived(conv);
+                                    _conversations.removeWhere((c) => _isSameChat(c, conv));
+                                    if (!_archivedConversations.any((ac) => _isSameChat(ac, conv))) {
+                                      _archivedConversations.add(conv);
+                                    }
                                   });
+                                  _saveFolderState();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text('Archived ${conv['name']}'),
@@ -2174,9 +2368,12 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                         label: 'UNDO',
                                         onPressed: () {
                                           setState(() {
-                                            _archivedConversations.remove(conv);
-                                            _conversations.insert(index, conv);
+                                            _removeChatArchived(conv);
+                                            conv['isArchived'] = false;
+                                            _archivedConversations.removeWhere((c) => _isSameChat(c, conv));
+                                            _conversations.insert(index.clamp(0, _conversations.length), conv);
                                           });
+                                          _saveFolderState();
                                         },
                                       ),
                                     ),

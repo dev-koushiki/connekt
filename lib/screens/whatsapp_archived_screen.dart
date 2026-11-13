@@ -206,6 +206,7 @@ class _WhatsAppArchivedScreenState extends State<WhatsAppArchivedScreen> {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => ChatScreen(
+                                  conversationId: chat['id']?.toString(),
                                   contactName: (chat['target'] ?? chat['name'] ?? '').toString(),
                                   avatarUrl: (chat['avatar'] ?? '').toString(),
                                   showBackButton: true,
