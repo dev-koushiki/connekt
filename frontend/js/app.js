@@ -465,7 +465,7 @@ class AppController {
             <span class="action-row-icon" style="color: #3b82f6;">💬</span>
             <span class="action-row-title">Chat</span>
           </div>
-          <span class="action-badge-red">2</span>
+          <span style="font-size: 1.2rem; color: var(--text-muted);">→</span>
         </div>
 
         <!-- Mail Card -->
@@ -474,7 +474,7 @@ class AppController {
             <span class="action-row-icon" style="color: #8b5cf6;">✉️</span>
             <span class="action-row-title">Mail</span>
           </div>
-          <span class="action-badge-red">4</span>
+          <span style="font-size: 1.2rem; color: var(--text-muted);">→</span>
         </div>
 
         <!-- Meeting Card -->

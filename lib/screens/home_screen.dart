@@ -1254,14 +1254,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildMainActionCard(
                       icon: Icons.chat_bubble_rounded,
                       title: 'Chat',
-                      badgeCount: 2,
+                      badgeCount: 0,
                       onTap: () => widget.onNavigateToTab?.call(2), // Chats tab
                     ),
                     const SizedBox(height: 10),
                     _buildMainActionCard(
                       icon: Icons.mail_rounded,
                       title: 'Mail',
-                      badgeCount: 4,
+                      badgeCount: 0,
                       onTap: () => widget.onNavigateToTab?.call(3), // Mail tab
                     ),
                     const SizedBox(height: 10),
@@ -1736,25 +1736,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            if (_quickNotes.isNotEmpty)
-              Positioned(
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF854D0E),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${_quickNotes.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
