@@ -865,7 +865,7 @@ class ApiService {
           body: jsonEncode({
             'text': text,
             'targetLang': targetLang,
-            if (sourceLang != null) 'sourceLang': sourceLang,
+            ...?sourceLang != null ? {'sourceLang': sourceLang} : null,
           }),
         );
       });

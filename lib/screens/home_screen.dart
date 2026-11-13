@@ -88,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _isProfessional = widget.user?.currentMode == 'professional';
     _loadLocalData();
+    _fetchRemindersFromServer();
   }
 
   @override
@@ -162,6 +163,18 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  Future<void> _fetchRemindersFromServer() async {
+    try {
+      final serverReminders = await ApiService.getReminders();
+      if (serverReminders.isNotEmpty && mounted) {
+        setState(() {
+          _reminders = serverReminders.map((m) => ReminderItem.fromJson(m)).toList();
+        });
+        _saveReminders();
+      }
+    } catch (_) {}
+  }
+
   Future<void> _saveReminders() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -184,9 +197,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String get _connektEmail {
     final rawUsername = widget.user?.username.trim();
     if (rawUsername != null && rawUsername.isNotEmpty) {
-      return '$rawUsername@connect.net.in';
+      return '$rawUsername@connekt.net.in';
     }
-    return 'user_id@connect.net.in';
+    return 'user_id@connekt.net.in';
   }
 
   void _toggleProfessionalMode(bool value) {
@@ -930,7 +943,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showInviteFriendsSheet(BuildContext context) {
-    final inviteLink = 'https://connekt.me/join?ref=${widget.user?.username ?? 'welcome'}';
+    final inviteLink = 'https://connekt.net.in/join?ref=${widget.user?.username ?? 'welcome'}';
 
     showModalBottomSheet(
       context: context,
