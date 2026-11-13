@@ -2121,9 +2121,14 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Notifications',
             onPressed: () => _showNotificationsSheet(context),
           ),
-          // 3. Vibe / Social Icon
+          // 3. Vibe / Social Icon (Crown Cycle matching original mockup)
           IconButton(
-            icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Color(0xFF475569), size: 26),
+            icon: Image.asset(
+              'assets/images/nav_crown_cycle.png',
+              width: 25,
+              height: 25,
+              color: const Color(0xFF475569),
+            ),
             tooltip: 'Vibe Feed',
             onPressed: () => widget.onNavigateToTab?.call(4),
           ),
