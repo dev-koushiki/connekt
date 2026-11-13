@@ -2600,12 +2600,6 @@ class AppController {
       </div>
     `;
   }
-}
-
-// Instantiate and export app controller
-window.app = new AppController();
-document.addEventListener('DOMContentLoaded', () => {
-  window.app.init();
 
   // ====================================================================
   // SCHEDULE & CALENDAR MODULE (WITH TWO-WAY REMINDER INTEGRATION)
@@ -3275,6 +3269,10 @@ document.addEventListener('DOMContentLoaded', () => {
     sidebar?.classList.toggle('mobile-open');
     overlay?.classList.toggle('active');
   }
-
 }
-);
+
+// Instantiate and export app controller
+window.app = new AppController();
+document.addEventListener('DOMContentLoaded', () => {
+  window.app.init();
+});
