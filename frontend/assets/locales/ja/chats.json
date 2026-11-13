@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "ステータス",
+  "calls": "通話",
+  "new_chat": "New チャット",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and 通話 are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear チャット",
+  "delete_chat": "削除 チャット",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

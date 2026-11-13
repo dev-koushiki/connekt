@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT Email",
+  "inbox": "Posta in arrivo",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "Scrivi",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "Elimina",
+  "empty_inbox": "Your Posta in arrivo is clear and up to date!"
+}

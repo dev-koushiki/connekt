@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "状态",
+  "calls": "通话",
+  "new_chat": "New 聊天",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and 通话 are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear 聊天",
+  "delete_chat": "删除 聊天",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

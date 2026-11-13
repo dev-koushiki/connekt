@@ -126,6 +126,12 @@
           <!-- Active Mode Badge Indicator -->
           <span id="activeModeBadge" class="badge badge-mode badge-success">COMMON MODE</span>
 
+          <!-- Language Selector Button (A/文) -->
+          <button id="btnLanguageSelector" class="icon-btn" title="Choose Language / भाषा चुनें" onclick="window.i18n.showLanguageSelector()" style="border: 1px solid var(--border-subtle); border-radius: 8px; padding: 4px 8px; display: flex; align-items: center; gap: 6px; font-weight: 700; height: 36px;">
+            <span style="font-size: 1.05rem;">A/文</span>
+            <span id="currentLangLabel" style="font-size: 0.8rem; color: var(--text-secondary);">English</span>
+          </button>
+
           <!-- Theme Mood Toggle (Light / Dark) -->
           <button id="btnThemeToggle" class="icon-btn" title="Toggle Light / Dark Mood" onclick="window.app.toggleTheme()">
             <span id="themeToggleIcon">🌙</span>
@@ -149,6 +155,23 @@
       <main id="mainContentArea" class="content-area">
         <!-- Rendered dynamically by app.js -->
       </main>
+
+      <!-- Mobile Bottom Navigation Bar matching Mobile App -->
+      <nav class="mobile-bottom-nav">
+        <button class="bottom-nav-item" onclick="window.app.navigateTo('profile')" title="Profile">
+          <span>👤</span>
+        </button>
+        <button class="bottom-nav-item" onclick="window.app.showNotifications()" title="Notifications">
+          <span>🔔</span>
+          <span class="bottom-nav-dot"></span>
+        </button>
+        <button class="bottom-nav-item" onclick="window.app.navigateTo('home')" title="Vibe Feed">
+          <span style="font-size: 1.4rem;">😊</span>
+        </button>
+        <button class="bottom-nav-item" onclick="window.app.toggleMobileMenu()" title="Menu">
+          <span>☰</span>
+        </button>
+      </nav>
 
     </div>
   </div>
@@ -190,7 +213,7 @@
 
             <div class="form-group">
               <label class="form-label">Phone Number, Username, or Connekt Mail</label>
-              <input type="text" id="loginIdentifier" class="form-control" placeholder="+1234567890 or @username or name@connekt.me" required />
+              <input type="text" id="loginIdentifier" class="form-control" placeholder="+1234567890 or @username or name@connekt.net.in" required />
             </div>
 
             <div class="form-group" id="loginPasswordGroup">
@@ -251,7 +274,7 @@
             <!-- Connekt Mail Preview Banner -->
             <div style="background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 16px;">
               <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">YOUR UNIQUE CONNEKT MAIL ADDRESS</span>
-              <span id="connektMailPreview" style="font-weight: 700; color: var(--accent-cyan); font-size: 0.95rem;">yourname@connekt.me</span>
+              <span id="connektMailPreview" style="font-weight: 700; color: var(--accent-cyan); font-size: 0.95rem;">yourname@connekt.net.in</span>
             </div>
 
             <div class="grid-2">
@@ -329,6 +352,7 @@
 
   <!-- Application Modules -->
   <script src="/js/api.js"></script>
+  <script src="/js/i18n.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/community.js"></script>

@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT Mail",
+  "inbox": "Inbox",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "Compose",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "Delete",
+  "empty_inbox": "Your inbox is clear and up to date!"
+}

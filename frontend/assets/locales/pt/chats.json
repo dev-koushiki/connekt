@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "Status",
+  "calls": "Chamadas",
+  "new_chat": "New Bate-papo",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and Chamadas are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear Bate-papo",
+  "delete_chat": "Excluir Bate-papo",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

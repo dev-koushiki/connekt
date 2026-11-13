@@ -31,7 +31,7 @@ class AuthManager {
         e.target.value = val;
         const mailPreview = document.getElementById('connektMailPreview');
         if (mailPreview) {
-          mailPreview.textContent = val ? `${val}@connekt.me` : 'yourname@connekt.me';
+          mailPreview.textContent = val ? `${val}@connekt.net.in` : 'yourname@connekt.net.in';
         }
         this.checkUsernameDebounced(val);
       });
@@ -168,7 +168,7 @@ class AuthManager {
     });
 
     const mailPreview = document.getElementById('connektMailPreview');
-    if (mailPreview) mailPreview.textContent = 'yourname@connekt.me';
+    if (mailPreview) mailPreview.textContent = 'yourname@connekt.net.in';
 
     this.switchAuthTab('login');
   }

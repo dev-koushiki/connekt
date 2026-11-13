@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT మెయిల్",
+  "inbox": "ఇన్‌బాక్స్",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "రాయండి",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "తొలగించు",
+  "empty_inbox": "Your ఇన్‌బాక్స్ is clear and up to date!"
+}

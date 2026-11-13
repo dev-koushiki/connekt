@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT அஞ்சல்",
+  "inbox": "உள்வரும் அஞ்சல்",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "எழுது",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "நீக்கு",
+  "empty_inbox": "Your உள்வரும் அஞ்சல் is clear and up to date!"
+}

@@ -2067,7 +2067,7 @@ class AppController {
             <div class="grid-2">
               <div class="form-group">
                 <label class="form-label">Attendees (Emails or Usernames)</label>
-                <input type="text" id="schAttendees" class="form-control" placeholder="sarah@connekt.me, alex" />
+                <input type="text" id="schAttendees" class="form-control" placeholder="sarah@connekt.net.in, alex" />
                 <span style="font-size: 0.75rem; color: var(--text-muted);">Separate with commas.</span>
               </div>
               <div class="form-group">
@@ -2670,7 +2670,7 @@ class AppController {
     const modules = {
       messages: { title: 'Direct & Group Messaging', phase: 'Phase 2', desc: 'Real-time WebSocket chat, read receipts, voice notes, and group invitation approval.' },
       communities: { title: 'Communities & Live Streaming', phase: 'Phase 3', desc: 'Public & private communities, interactive live streams, comments, and member roles.' },
-      mail: { title: 'Connekt Mail Client', phase: 'Phase 4', desc: 'Dedicated email interface with your unique ID ' + (this.currentUser?.email || 'user@connekt.me') + ', SMTP delivery, and attachments.' },
+      mail: { title: 'Connekt Mail Client', phase: 'Phase 4', desc: 'Dedicated email interface with your unique ID ' + (this.currentUser?.email || 'user@connekt.net.in') + ', SMTP delivery, and attachments.' },
       meetings: { title: 'Meetings & Audio/Video Calls', phase: 'Phase 4', desc: 'P2P WebRTC voice/video calls, screen sharing, and multi-user conference rooms.' },
       reminders: { title: 'Centralized Reminder Box', phase: 'Phase 5', desc: 'Smart reminders, cross-module clip saving, notifications, and scheduled tasks.' },
       network: { title: 'Professional Career Network', phase: 'Phase 6', desc: 'Job postings, internship boards, enterprise networking, and talent discovery.' },

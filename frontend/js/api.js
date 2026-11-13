@@ -393,6 +393,33 @@ class ApiService {
     getSyncStatus: () =>
       this.request('/calls/sync-status')
   };
+
+  // Reminders API (Synced with Mobile App & PostgreSQL Database)
+  reminders = {
+    getAll: () => this.request('/reminders'),
+    create: (data) => this.request('/reminders', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    update: (id, data) => this.request(`/reminders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    toggleComplete: (id) => this.request(`/reminders/${id}/toggle`, {
+      method: 'PATCH'
+    }),
+    delete: (id) => this.request(`/reminders/${id}`, {
+      method: 'DELETE'
+    })
+  };
+
+  // Dynamic Translation API
+  translate = {
+    translateText: (text, targetLang, sourceLang = 'auto') => this.request('/translate', {
+      method: 'POST',
+      body: JSON.stringify({ text, targetLang, sourceLang })
+    })
+  };
 }
 
 // Global API instance

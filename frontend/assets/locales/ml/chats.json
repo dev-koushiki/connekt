@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "സ്റ്റാറ്റസ്",
+  "calls": "കോളുകൾ",
+  "new_chat": "New ചാറ്റ്",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and കോളുകൾ are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear ചാറ്റ്",
+  "delete_chat": "ഇല്ലാതാക്കുക ചാറ്റ്",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

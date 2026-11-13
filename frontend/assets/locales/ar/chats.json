@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "الحالة",
+  "calls": "المكالمات",
+  "new_chat": "New الدردشة",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and المكالمات are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear الدردشة",
+  "delete_chat": "حذف الدردشة",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

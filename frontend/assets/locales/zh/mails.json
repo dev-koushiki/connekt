@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT 邮件",
+  "inbox": "收件箱",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "写邮件",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "删除",
+  "empty_inbox": "Your 收件箱 is clear and up to date!"
+}
