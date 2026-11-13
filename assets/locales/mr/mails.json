@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT मेल",
+  "inbox": "इनबॉक्स",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "तयार करा",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "हटवा",
+  "empty_inbox": "Your इनबॉक्स is clear and up to date!"
+}

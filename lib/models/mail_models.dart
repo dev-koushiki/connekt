@@ -226,7 +226,7 @@ class MailExternalStatus {
   final bool inboundWebhookConfigured;
 
   const MailExternalStatus({
-    this.domain = 'connekt.me',
+    this.domain = 'connekt.net.in',
     this.smtpConfigured = false,
     this.imapConfigured = false,
     this.inboundWebhookConfigured = false,
@@ -234,7 +234,7 @@ class MailExternalStatus {
 
   factory MailExternalStatus.fromJson(Map<String, dynamic> json) {
     return MailExternalStatus(
-      domain: (json['domain'] ?? 'connekt.me').toString(),
+      domain: (json['domain'] ?? 'connekt.net.in').toString(),
       smtpConfigured: json['smtpConfigured'] == true,
       imapConfigured: json['imapConfigured'] == true,
       inboundWebhookConfigured: json['inboundWebhookConfigured'] == true,

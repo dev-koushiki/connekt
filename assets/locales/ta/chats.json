@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "நிலை",
+  "calls": "அழைப்புகள்",
+  "new_chat": "New அரட்டை",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and அழைப்புகள் are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear அரட்டை",
+  "delete_chat": "நீக்கு அரட்டை",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

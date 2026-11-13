@@ -8,6 +8,7 @@ import '../widgets/social/community_view.dart';
 import '../widgets/social/professional_view.dart';
 import '../widgets/social/social_feed_view.dart';
 import '../widgets/social/user_profile_sheet.dart';
+import '../i18n/app_localizations.dart';
 
 class SocialScreen extends StatefulWidget {
   final UserModel? user;
@@ -252,19 +253,19 @@ class _SocialScreenState extends State<SocialScreen> {
                       children: [
                         _modeTabButton(
                           id: 'social',
-                          label: 'Social Mode',
+                          label: context.tr('social.social_mode'),
                           icon: Icons.people_alt_outlined,
                           textSecondary: textSecondary,
                         ),
                         _modeTabButton(
                           id: 'professional',
-                          label: 'Professional Mode',
+                          label: context.tr('social.professional_mode'),
                           icon: Icons.work_outline_rounded,
                           textSecondary: textSecondary,
                         ),
                         _modeTabButton(
                           id: 'community',
-                          label: 'Community',
+                          label: context.tr('social.community'),
                           icon: Icons.groups_outlined,
                           textSecondary: textSecondary,
                         ),

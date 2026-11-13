@@ -36,6 +36,32 @@ class ReminderItem {
   );
 }
 
+class QuickNoteItem {
+  final String id;
+  String text;
+  DateTime createdAt;
+
+  QuickNoteItem({
+    required this.id,
+    required this.text,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'text': text,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory QuickNoteItem.fromJson(Map<String, dynamic> json) => QuickNoteItem(
+    id: json['id'] as String? ?? DateTime.now().millisecondsSinceEpoch.toString(),
+    text: json['text'] as String? ?? '',
+    createdAt: json['createdAt'] != null
+        ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
+        : DateTime.now(),
+  );
+}
+
 class HomeScreen extends StatefulWidget {
   final UserModel? user;
   final ValueChanged<int>? onNavigateToTab;
@@ -54,7 +80,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isProfessional = false;
-  String _quickNoteText = '';
+  List<QuickNoteItem> _quickNotes = [];
   List<ReminderItem> _reminders = [];
 
   @override
@@ -77,14 +103,39 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadLocalData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final notes = prefs.getString('connekt_home_quick_note');
+      final notesRaw = prefs.getStringList('connekt_home_quick_notes_v2');
+      final legacyNote = prefs.getString('connekt_home_quick_note');
       final remindersRaw = prefs.getStringList('connekt_home_reminders_v2');
 
       setState(() {
-        if (notes != null) {
-          _quickNoteText = notes;
+        if (notesRaw != null && notesRaw.isNotEmpty) {
+          _quickNotes = notesRaw.map((s) {
+            try {
+              return QuickNoteItem.fromJson(jsonDecode(s) as Map<String, dynamic>);
+            } catch (_) {
+              return QuickNoteItem(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                text: s,
+                createdAt: DateTime.now(),
+              );
+            }
+          }).toList();
+        } else if (legacyNote != null && legacyNote.trim().isNotEmpty) {
+          _quickNotes = [
+            QuickNoteItem(
+              id: '1',
+              text: legacyNote.trim(),
+              createdAt: DateTime.now(),
+            ),
+          ];
         } else {
-          _quickNoteText = 'Draft presentation for next week\'s product demo.\nSync with regional leads.';
+          _quickNotes = [
+            QuickNoteItem(
+              id: '1',
+              text: 'Draft presentation for next week\'s product demo.\nSync with regional leads.',
+              createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+            ),
+          ];
         }
 
         if (remindersRaw != null && remindersRaw.isNotEmpty) {
@@ -119,11 +170,14 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
-  Future<void> _saveQuickNote(String text) async {
-    _quickNoteText = text;
+  Future<void> _saveQuickNotes() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('connekt_home_quick_note', text);
+      final rawList = _quickNotes.map((n) => jsonEncode(n.toJson())).toList();
+      await prefs.setStringList('connekt_home_quick_notes_v2', rawList);
+      if (_quickNotes.isNotEmpty) {
+        await prefs.setString('connekt_home_quick_note', _quickNotes.first.text);
+      }
     } catch (_) {}
   }
 
@@ -859,176 +913,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showQuickNotesSheet(BuildContext context) {
-    final noteController = TextEditingController(text: _quickNoteText);
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
-        final screenHeight = MediaQuery.of(ctx).size.height;
-
-        return AnimatedPadding(
-          padding: EdgeInsets.only(bottom: keyboardInset),
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: screenHeight * 0.70, // Prevents covering the whole screen
-            ),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFEF9C3), // Soft yellow sticky note theme
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 16,
-                  offset: Offset(0, -4),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(left: 20, right: 20, top: 14, bottom: 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top drag handle
-                    Center(
-                      child: Container(
-                        width: 44,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFCA8A04).withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Header: Quick Notes + Actions (Hide Keyboard & Save Note)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.edit_note_rounded, color: Color(0xFF854D0E), size: 24),
-                            SizedBox(width: 8),
-                            Text(
-                              'Quick Notes',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                fontFamily: 'Caveat',
-                                color: Color(0xFF713F12),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            if (keyboardInset > 0)
-                              IconButton(
-                                icon: const Icon(Icons.keyboard_hide_rounded, color: Color(0xFF854D0E), size: 20),
-                                tooltip: 'Hide Keyboard',
-                                onPressed: () => FocusScope.of(ctx).unfocus(),
-                              ),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                _saveQuickNote(noteController.text);
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Quick Note saved!'),
-                                    duration: Duration(seconds: 1),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
-                              label: const Text('Save Note', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF854D0E),
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Post-it Sticky Text Field
-                    TextField(
-                      controller: noteController,
-                      minLines: 3,
-                      maxLines: 5,
-                      autofocus: false,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Color(0xFF422006),
-                        height: 1.4,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      cursorColor: const Color(0xFF854D0E),
-                      decoration: InputDecoration(
-                        hintText: 'Type your ideas, scratch notes or thoughts here...',
-                        hintStyle: TextStyle(
-                          color: const Color(0xFF854D0E).withValues(alpha: 0.5),
-                          fontSize: 14,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.65),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFFFDE047), width: 1.2),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFFFDE047), width: 1.2),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFFCA8A04), width: 1.8),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Footer Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Saved locally on this device',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF854D0E), fontStyle: FontStyle.italic),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            noteController.clear();
-                          },
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text('Clear', style: TextStyle(fontSize: 11.5, color: Color(0xFF854D0E))),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      builder: (ctx) => _QuickNotesSheetContent(
+        initialNotes: _quickNotes,
+        onNotesUpdated: (updatedList) {
+          setState(() {
+            _quickNotes = List.from(updatedList);
+          });
+          _saveQuickNotes();
+        },
+      ),
     );
   }
 
@@ -1810,18 +1707,42 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        child: const Center(
-          child: Text(
-            'Quick Notes',
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              fontStyle: FontStyle.italic,
-              fontFamily: 'Caveat',
-              color: Color(0xFF713F12),
-              letterSpacing: 0.5,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Center(
+              child: Text(
+                'Quick Notes',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  fontStyle: FontStyle.italic,
+                  fontFamily: 'Caveat',
+                  color: Color(0xFF713F12),
+                  letterSpacing: 0.5,
+                ),
+              ),
             ),
-          ),
+            if (_quickNotes.isNotEmpty)
+              Positioned(
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF854D0E),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${_quickNotes.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -2695,6 +2616,616 @@ class _InviteContactsSheetContentState extends State<_InviteContactsSheetContent
           ],
         ),
       ),
+    );
+  }
+}
+
+class _QuickNotesSheetContent extends StatefulWidget {
+  final List<QuickNoteItem> initialNotes;
+  final ValueChanged<List<QuickNoteItem>> onNotesUpdated;
+
+  const _QuickNotesSheetContent({
+    required this.initialNotes,
+    required this.onNotesUpdated,
+  });
+
+  @override
+  State<_QuickNotesSheetContent> createState() => _QuickNotesSheetContentState();
+}
+
+class _QuickNotesSheetContentState extends State<_QuickNotesSheetContent> {
+  late List<QuickNoteItem> _notes;
+  final TextEditingController _noteController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  bool _isAdding = false;
+  QuickNoteItem? _editingNote;
+
+  @override
+  void initState() {
+    super.initState();
+    _notes = List.from(widget.initialNotes);
+    if (_notes.isEmpty) {
+      _isAdding = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _startAddNote() {
+    setState(() {
+      _editingNote = null;
+      _noteController.clear();
+      _isAdding = true;
+    });
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  void _startEditNote(QuickNoteItem note) {
+    setState(() {
+      _editingNote = note;
+      _noteController.text = note.text;
+      _isAdding = true;
+    });
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _focusNode.requestFocus();
+        _noteController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _noteController.text.length),
+        );
+      }
+    });
+  }
+
+  void _saveNote() {
+    final text = _noteController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter some text before saving.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      if (_editingNote != null) {
+        _editingNote!.text = text;
+        _editingNote!.createdAt = DateTime.now();
+      } else {
+        final newNote = QuickNoteItem(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: text,
+          createdAt: DateTime.now(),
+        );
+        _notes.insert(0, newNote);
+      }
+      _isAdding = false;
+      _editingNote = null;
+      _noteController.clear();
+    });
+
+    FocusScope.of(context).unfocus();
+    widget.onNotesUpdated(_notes);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Quick Note saved!'),
+        duration: Duration(seconds: 1),
+        backgroundColor: Color(0xFF854D0E),
+      ),
+    );
+  }
+
+  void _deleteNote(QuickNoteItem note) {
+    setState(() {
+      _notes.removeWhere((item) => item.id == note.id);
+      if (_editingNote?.id == note.id) {
+        _editingNote = null;
+        _isAdding = false;
+        _noteController.clear();
+      }
+    });
+    widget.onNotesUpdated(_notes);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Note deleted'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _copyNote(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Note copied to clipboard!'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  String _formatNoteDate(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = now.year == dt.year && now.month == dt.month && now.day == dt.day;
+    final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    final timeStr = '$hour:$minute $ampm';
+
+    if (isToday) {
+      return 'Today, $timeStr';
+    }
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, $timeStr';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return AnimatedPadding(
+      padding: EdgeInsets.only(bottom: keyboardInset),
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: screenHeight * 0.78,
+        ),
+        decoration: const BoxDecoration(
+          color: Color(0xFFFEF9C3), // Soft yellow sticky note theme
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 16,
+              offset: Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top drag handle
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCA8A04).withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Header Row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.edit_note_rounded, color: Color(0xFF854D0E), size: 24),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Quick Notes',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'Caveat',
+                            color: Color(0xFF713F12),
+                          ),
+                        ),
+                        if (_notes.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF854D0E).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${_notes.length}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF713F12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        if (keyboardInset > 0)
+                          IconButton(
+                            icon: const Icon(Icons.keyboard_hide_rounded, color: Color(0xFF854D0E), size: 20),
+                            tooltip: 'Hide Keyboard',
+                            onPressed: () => FocusScope.of(context).unfocus(),
+                          ),
+                        if (_isAdding) ...[
+                          if (_notes.isNotEmpty)
+                            TextButton(
+                              onPressed: () {
+                                FocusScope.of(context).unfocus();
+                                setState(() {
+                                  _isAdding = false;
+                                  _editingNote = null;
+                                  _noteController.clear();
+                                });
+                              },
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  color: Color(0xFF854D0E),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ElevatedButton.icon(
+                            onPressed: _saveNote,
+                            icon: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                            label: const Text(
+                              'Save Note',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.white,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF854D0E),
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            ),
+                          ),
+                        ] else ...[
+                          ElevatedButton.icon(
+                            onPressed: _startAddNote,
+                            icon: const Icon(Icons.add_rounded, size: 17, color: Colors.white),
+                            label: const Text(
+                              'Add Note',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.white,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF854D0E),
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Body: Composer or Cards List
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+                  child: _isAdding ? _buildComposer() : _buildNotesList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComposer() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_editingNote != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF854D0E)),
+                const SizedBox(width: 6),
+                Text(
+                  'Editing note from ${_formatNoteDate(_editingNote!.createdAt)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF854D0E),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        TextField(
+          controller: _noteController,
+          focusNode: _focusNode,
+          minLines: 4,
+          maxLines: 8,
+          autofocus: true,
+          style: const TextStyle(
+            fontSize: 15,
+            color: Color(0xFF422006),
+            height: 1.45,
+            fontWeight: FontWeight.w500,
+          ),
+          cursorColor: const Color(0xFF854D0E),
+          decoration: InputDecoration(
+            hintText: 'Type your ideas, scratch notes or thoughts here...',
+            hintStyle: TextStyle(
+              color: const Color(0xFF854D0E).withValues(alpha: 0.5),
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.7),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFFDE047), width: 1.2),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFFDE047), width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFCA8A04), width: 1.8),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Saved locally on this device',
+              style: TextStyle(fontSize: 11, color: Color(0xFF854D0E), fontStyle: FontStyle.italic),
+            ),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => _noteController.clear(),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Clear', style: TextStyle(fontSize: 11.5, color: Color(0xFF854D0E))),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _saveNote,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF854D0E),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text(
+                    'Save Note',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotesList() {
+    if (_notes.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.note_alt_outlined,
+                  size: 28,
+                  color: Color(0xFF854D0E),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'No notes saved yet',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF713F12),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Tap "+ Add Note" to capture your quick thoughts.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: const Color(0xFF854D0E).withValues(alpha: 0.7),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _startAddNote,
+                icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                label: const Text('Create First Note', style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF854D0E),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        ...List.generate(_notes.length, (index) {
+          final note = _notes[index];
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFDE047), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF854D0E).withValues(alpha: 0.06),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top meta & actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 13,
+                          color: Color(0xFF854D0E),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _formatNoteDate(note.createdAt),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF854D0E),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        InkWell(
+                          onTap: () => _copyNote(note.text),
+                          borderRadius: BorderRadius.circular(12),
+                          child: const Padding(
+                            padding: EdgeInsets.all(5),
+                            child: Icon(Icons.copy_rounded, size: 16, color: Color(0xFF854D0E)),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () => _startEditNote(note),
+                          borderRadius: BorderRadius.circular(12),
+                          child: const Padding(
+                            padding: EdgeInsets.all(5),
+                            child: Icon(Icons.edit_outlined, size: 16, color: Color(0xFF854D0E)),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () => _deleteNote(note),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(5),
+                            child: Icon(Icons.delete_outline_rounded, size: 16, color: Colors.red.shade400),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Divider(
+                  color: const Color(0xFFFDE047).withValues(alpha: 0.8),
+                  height: 14,
+                  thickness: 1,
+                ),
+                SelectableText(
+                  note.text,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    color: Color(0xFF422006),
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: _startAddNote,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFCA8A04).withValues(alpha: 0.5),
+                style: BorderStyle.solid,
+                width: 1,
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add_rounded, size: 18, color: Color(0xFF854D0E)),
+                SizedBox(width: 6),
+                Text(
+                  'Add New Note',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF854D0E),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

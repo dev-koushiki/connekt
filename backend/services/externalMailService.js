@@ -17,7 +17,7 @@ try {
   ImapFlow = null;
 }
 
-const CONNEKT_DOMAIN = (process.env.CONNEKT_DOMAIN || 'connekt.me').toLowerCase();
+const CONNEKT_DOMAIN = (process.env.CONNEKT_DOMAIN || 'connekt.net.in').toLowerCase();
 const UPLOADS_MAIL_DIR = path.resolve(__dirname, '../uploads/mail');
 
 const BLOCKED_ATTACHMENT_EXTENSIONS = new Set([

@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "Statut",
+  "calls": "Appels",
+  "new_chat": "New Discussion",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and Appels are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear Discussion",
+  "delete_chat": "Supprimer Discussion",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

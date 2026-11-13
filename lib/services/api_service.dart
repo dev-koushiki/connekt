@@ -499,8 +499,8 @@ class ApiService {
     final token = await getToken();
     final safeName = (name ?? '').trim();
     final fallbackMsg = safeName.isNotEmpty
-        ? 'Hi $safeName, join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me'
-        : 'Join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me';
+        ? 'Hi $safeName, join me on CONNEKT for chats, calls, meetings & mails! https://connekt.net.in'
+        : 'Join me on CONNEKT for chats, calls, meetings & mails! https://connekt.net.in';
     try {
       final res = await http
           .post(
@@ -827,6 +827,181 @@ class ApiService {
         return data['data']?['syncRequested'] == true;
       }
       return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Update preferred language on the backend
+  static Future<bool> updatePreferredLanguage(String lang) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.put(
+          Uri.parse('$base/users/language'),
+          headers: _headers(token),
+          body: jsonEncode({'language': lang}),
+        );
+      });
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Translate dynamic text using backend translation endpoint
+  static Future<Map<String, dynamic>?> translateText({
+    required String text,
+    required String targetLang,
+    String? sourceLang,
+  }) async {
+    try {
+      final token = await getToken();
+      final endpoint = token != null ? '/translate' : '/translate/public';
+      final res = await _safeRequest((base) {
+        return http.post(
+          Uri.parse('$base$endpoint'),
+          headers: _headers(token),
+          body: jsonEncode({
+            'text': text,
+            'targetLang': targetLang,
+            if (sourceLang != null) 'sourceLang': sourceLang,
+          }),
+        );
+      });
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body);
+        if (data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ===========================================================================
+  // REMINDERS & CALENDAR TWO-WAY INTEGRATION
+  // ===========================================================================
+
+  static Future<List<Map<String, dynamic>>> getReminders({String? status}) async {
+    try {
+      final token = await getToken();
+      final query = status != null ? '?status=$status' : '';
+      final res = await _safeRequest((base) {
+        return http.get(
+          Uri.parse('$base/reminders$query'),
+          headers: _headers(token),
+        );
+      });
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body);
+        if (data['data'] != null && data['data']['reminders'] != null) {
+          final list = data['data']['reminders'] as List;
+          return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createReminder({
+    required String title,
+    String description = '',
+    required String dueDate,
+    String dueTime = '09:00',
+    String repeatFrequency = 'none',
+    String notificationPreference = 'at_time',
+    bool calendarSync = true,
+  }) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.post(
+          Uri.parse('$base/reminders'),
+          headers: _headers(token),
+          body: jsonEncode({
+            'title': title,
+            'description': description,
+            'dueDate': dueDate,
+            'dueTime': dueTime,
+            'repeatFrequency': repeatFrequency,
+            'notificationPreference': notificationPreference,
+            'calendarSync': calendarSync,
+          }),
+        );
+      });
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body);
+        if (data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateReminder(
+    String id,
+    Map<String, dynamic> fields,
+  ) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.put(
+          Uri.parse('$base/reminders/$id'),
+          headers: _headers(token),
+          body: jsonEncode(fields),
+        );
+      });
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body);
+        if (data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> toggleReminderComplete(String id) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.patch(
+          Uri.parse('$base/reminders/$id/toggle'),
+          headers: _headers(token),
+        );
+      });
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body);
+        if (data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> deleteReminder(String id) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.delete(
+          Uri.parse('$base/reminders/$id'),
+          headers: _headers(token),
+        );
+      });
+      return res.statusCode >= 200 && res.statusCode < 300;
     } catch (_) {
       return false;
     }

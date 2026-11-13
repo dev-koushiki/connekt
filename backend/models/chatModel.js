@@ -43,7 +43,7 @@ class ChatModel {
     const cleanDigits = phone.toString().replace(/\D/g, '');
     const standardPhone = cleanDigits.length === 10 ? cleanDigits : (phone.startsWith('+') ? phone : `+${phone}`);
     const placeholderUsername = `user_${cleanDigits.slice(-6) || Math.floor(100000 + Math.random() * 900000)}`;
-    const placeholderEmail = `${placeholderUsername}@sms.connekt.me`;
+    const placeholderEmail = `${placeholderUsername}@sms.connekt.net.in`;
 
     const client = await db.getClient();
     try {
@@ -185,7 +185,7 @@ class ChatModel {
           if (phone) {
             try {
               const formattedPhone = normalizePhoneNumber(phone);
-              const inviteMsg = `[CONNEKT Group Invitation]: ${creatorName} invited you to join "${cleanTitle}"${cleanDesc ? `: "${cleanDesc}"` : ''}. Open CONNEKT to accept the invitation and start chatting! https://connekt.me`;
+              const inviteMsg = `[CONNEKT Group Invitation]: ${creatorName} invited you to join "${cleanTitle}"${cleanDesc ? `: "${cleanDesc}"` : ''}. Open CONNEKT to accept the invitation and start chatting! https://connekt.net.in`;
               await sendSms({
                 to: formattedPhone,
                 message: inviteMsg,

@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "સ્થિતિ",
+  "calls": "કૉલ્સ",
+  "new_chat": "New ચેટ",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and કૉલ્સ are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear ચેટ",
+  "delete_chat": "કાઢી નાખો ચેટ",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../models/mail_models.dart';
+import '../../i18n/app_localizations.dart';
+import '../language_selector_sheet.dart';
 
 class MailDrawer extends StatelessWidget {
   final String userEmail;
@@ -121,7 +123,7 @@ class MailDrawer extends StatelessWidget {
               context,
               keyId: 'inbox',
               icon: Icons.all_inbox_rounded,
-              label: 'All Inboxes',
+              label: context.tr('mails.inbox'),
               count: _countForView('inbox'),
               highlightBadge: true,
             ),
@@ -129,7 +131,7 @@ class MailDrawer extends StatelessWidget {
               context,
               keyId: 'primary',
               icon: Icons.inbox_rounded,
-              label: 'Primary',
+              label: context.tr('mails.primary'),
               count: _countForView('primary'),
               highlightBadge: true,
             ),
@@ -137,14 +139,14 @@ class MailDrawer extends StatelessWidget {
               context,
               keyId: 'social',
               icon: Icons.people_outline_rounded,
-              label: 'Social',
+              label: context.tr('mails.social'),
               count: _countForView('social'),
             ),
             _drawerItem(
               context,
               keyId: 'promotions',
               icon: Icons.local_offer_outlined,
-              label: 'Promotions',
+              label: context.tr('mails.promotions'),
               count: _countForView('promotions'),
             ),
             _drawerItem(
@@ -174,15 +176,15 @@ class MailDrawer extends StatelessWidget {
                 ),
               ),
             ),
-            _drawerItem(context, keyId: 'starred', icon: Icons.star_border_rounded, label: 'Starred', count: _countForView('starred')),
+            _drawerItem(context, keyId: 'starred', icon: Icons.star_border_rounded, label: context.tr('mails.starred'), count: _countForView('starred')),
             _drawerItem(context, keyId: 'snoozed', icon: Icons.schedule_rounded, label: 'Snoozed', count: _countForView('snoozed')),
             _drawerItem(context, keyId: 'important', icon: Icons.label_important_outline_rounded, label: 'Important', count: _countForView('important')),
-            _drawerItem(context, keyId: 'sent', icon: Icons.send_outlined, label: 'Sent', count: _countForView('sent')),
+            _drawerItem(context, keyId: 'sent', icon: Icons.send_outlined, label: context.tr('mails.sent'), count: _countForView('sent')),
             _drawerItem(context, keyId: 'scheduled', icon: Icons.schedule_send_outlined, label: 'Scheduled', count: _countForView('scheduled')),
-            _drawerItem(context, keyId: 'drafts', icon: Icons.insert_drive_file_outlined, label: 'Drafts', count: _countForView('drafts')),
+            _drawerItem(context, keyId: 'drafts', icon: Icons.insert_drive_file_outlined, label: context.tr('mails.drafts'), count: _countForView('drafts')),
             _drawerItem(context, keyId: 'all', icon: Icons.mail_outline_rounded, label: 'All mail'),
-            _drawerItem(context, keyId: 'spam', icon: Icons.report_gmailerrorred_outlined, label: 'Spam', count: _countForView('spam')),
-            _drawerItem(context, keyId: 'trash', icon: Icons.delete_outline_rounded, label: 'Trash', count: _countForView('trash')),
+            _drawerItem(context, keyId: 'spam', icon: Icons.report_gmailerrorred_outlined, label: context.tr('mails.spam'), count: _countForView('spam')),
+            _drawerItem(context, keyId: 'trash', icon: Icons.delete_outline_rounded, label: context.tr('mails.trash'), count: _countForView('trash')),
 
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 12, 4),
@@ -277,6 +279,19 @@ class MailDrawer extends StatelessWidget {
                   },
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: ListTile(
+                dense: true,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                leading: Icon(Icons.translate_rounded, color: textSecondary, size: 20),
+                title: Text(context.tr('common.select_language'), style: TextStyle(color: textPrimary, fontSize: 13.5, fontWeight: FontWeight.w500)),
+                onTap: () {
+                  Navigator.pop(context);
+                  LanguageSelectorSheet.show(context);
+                },
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: ListTile(

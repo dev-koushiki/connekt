@@ -14,11 +14,16 @@ import 'screens/mail_screen.dart';
 import 'screens/social_screen.dart';
 import 'screens/profile_screen.dart';
 import 'services/theme_service.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'i18n/app_localizations.dart';
+import 'i18n/languages.dart';
+import 'services/i18n_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiConfig.loadHost();
   await ThemeService.init();
+  await I18nService.init();
   runApp(const ConnektApp());
 }
 
@@ -55,6 +60,7 @@ class _ConnektAppState extends State<ConnektApp> {
       final cached = await ApiService.getCachedUser();
       if (!mounted || epoch != _authEpoch) return;
       if (cached != null) {
+        I18nService.syncWithUser(cached.preferredLanguage);
         setState(() {
           _currentUser = cached;
           _isLoading = false;
@@ -75,6 +81,7 @@ class _ConnektAppState extends State<ConnektApp> {
 
       setState(() {
         if (user != null) {
+          I18nService.syncWithUser(user.preferredLanguage);
           _currentUser = user;
         } else if (!hasToken) {
           _currentUser = null;
@@ -90,6 +97,7 @@ class _ConnektAppState extends State<ConnektApp> {
 
   void _onAuthSuccess(UserModel user) {
     _authEpoch++;
+    I18nService.syncWithUser(user.preferredLanguage);
     setState(() {
       _currentUser = user;
       _isLoading = false;
@@ -114,27 +122,40 @@ class _ConnektAppState extends State<ConnektApp> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, currentThemeMode, _) {
-        return MaterialApp(
-          title: 'CONNEKT',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: currentThemeMode,
-          home: _showSplash
-              ? SplashScreen(
-                  onFinish: () {
-                    if (mounted) {
-                      setState(() => _showSplash = false);
-                    }
-                  },
-                )
-              : _currentUser == null
-                  ? AuthScreen(onAuthSuccess: _onAuthSuccess)
-                  : MainNavigationShell(
-                      key: ValueKey(_currentUser!.id),
-                      user: _currentUser!,
-                      onLogout: _onLogout,
-                    ),
+        return ValueListenableBuilder<Locale>(
+          valueListenable: I18nService.localeNotifier,
+          builder: (context, currentLocale, _) {
+            return MaterialApp(
+              title: 'CONNEKT',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: currentThemeMode,
+              locale: currentLocale,
+              supportedLocales: AppLanguages.supportedLocales,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              home: _showSplash
+                  ? SplashScreen(
+                      onFinish: () {
+                        if (mounted) {
+                          setState(() => _showSplash = false);
+                        }
+                      },
+                    )
+                  : _currentUser == null
+                      ? AuthScreen(onAuthSuccess: _onAuthSuccess)
+                      : MainNavigationShell(
+                          key: ValueKey(_currentUser!.id),
+                          user: _currentUser!,
+                          onLogout: _onLogout,
+                        ),
+            );
+          },
         );
       },
     );

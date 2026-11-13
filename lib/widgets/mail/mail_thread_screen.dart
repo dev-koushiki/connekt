@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../config/api_config.dart';
 import '../../config/app_theme.dart';
 import '../../models/mail_models.dart';
+import '../translatable_text_widget.dart';
 
 class MailThreadScreen extends StatefulWidget {
   final MailThread thread;
@@ -530,8 +531,8 @@ class _MailThreadScreenState extends State<MailThreadScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SelectableText(
-                    mainBody.isNotEmpty ? mainBody : '(Empty message body)',
+                  TranslatableTextWidget(
+                    text: mainBody.isNotEmpty ? mainBody : '(Empty message body)',
                     style: TextStyle(color: textPrimary, fontSize: 14.5, height: 1.55),
                   ),
                   if (quotedBody.isNotEmpty) ...[

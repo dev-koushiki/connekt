@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT 메일",
+  "inbox": "받은편지함",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "작성",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "삭제",
+  "empty_inbox": "Your 받은편지함 is clear and up to date!"
+}

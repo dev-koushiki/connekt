@@ -75,7 +75,7 @@ class UserModel {
 
   static async findById(id) {
     const userRes = await db.query(
-      `SELECT id, phone, username, email, recovery_email, current_mode, allowed_modes, role, status, is_verified, last_login_at, created_at, updated_at
+      `SELECT id, phone, username, email, recovery_email, current_mode, allowed_modes, role, status, is_verified, preferred_language, last_login_at, created_at, updated_at
        FROM users WHERE id = $1`,
       [id]
     );
@@ -127,12 +127,18 @@ class UserModel {
   }
 
   static async findByIdentifier(identifier) {
-    const cleaned = identifier.trim().toLowerCase();
+    const cleaned = identifier.trim().toLowerCase().replace(/^@/, '');
+    const usernamePart = cleaned.includes('@') ? cleaned.split('@')[0] : cleaned;
     const res = await db.query(
       `SELECT id, phone, username, email, password_hash, current_mode, allowed_modes, role, status, is_verified
        FROM users
-       WHERE LOWER(username) = $1 OR phone = $2 OR LOWER(email) = $1`,
-      [cleaned, identifier.trim()]
+       WHERE LOWER(username) = $1 
+          OR phone = $2 
+          OR LOWER(email) = $1
+          OR LOWER(username) = $3
+          OR LOWER(REPLACE(email, '@connekt.net.in', '@connekt.me')) = $1
+          OR LOWER(REPLACE(email, '@connekt.me', '@connekt.net.in')) = $1`,
+      [cleaned, identifier.trim(), usernamePart]
     );
     return res.rows[0] || null;
   }
@@ -148,7 +154,14 @@ class UserModel {
   }
 
   static async findByEmail(email) {
-    const res = await db.query(`SELECT id, phone, username, email FROM users WHERE LOWER(email) = $1`, [email.trim().toLowerCase()]);
+    const cleaned = email.trim().toLowerCase();
+    const res = await db.query(
+      `SELECT id, phone, username, email FROM users 
+       WHERE LOWER(email) = $1 
+          OR LOWER(REPLACE(email, '@connekt.net.in', '@connekt.me')) = $1
+          OR LOWER(REPLACE(email, '@connekt.me', '@connekt.net.in')) = $1`,
+      [cleaned]
+    );
     return res.rows[0] || null;
   }
 
@@ -164,6 +177,14 @@ class UserModel {
     const res = await db.query(
       `UPDATE users SET current_mode = $1, updated_at = NOW() WHERE id = $2 RETURNING id, current_mode`,
       [mode, userId]
+    );
+    return res.rows[0] || null;
+  }
+
+  static async updatePreferredLanguage(userId, language) {
+    const res = await db.query(
+      `UPDATE users SET preferred_language = $1, updated_at = NOW() WHERE id = $2 RETURNING id, preferred_language`,
+      [language, userId]
     );
     return res.rows[0] || null;
   }

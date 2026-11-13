@@ -29,7 +29,7 @@ function toICalDate(d) {
 /**
  * Generate standard RFC 5545 iCalendar (.ics) content
  */
-function generateICalendar(meeting, hostName = 'Host', hostEmail = 'host@connekt.me', joinUrl = '') {
+function generateICalendar(meeting, hostName = 'Host', hostEmail = 'host@connekt.net.in', joinUrl = '') {
   const start = meeting.scheduled_at || meeting.start_time || new Date();
   const durationMins = meeting.duration_minutes || 60;
   const end = new Date(new Date(start).getTime() + durationMins * 60000);
@@ -37,7 +37,7 @@ function generateICalendar(meeting, hostName = 'Host', hostEmail = 'host@connekt
   const dtStart = toICalDate(start);
   const dtEnd = toICalDate(end);
   const dtStamp = toICalDate(new Date());
-  const uid = `cnk-${meeting.room_code || meeting.id}@connekt.me`;
+  const uid = `cnk-${meeting.room_code || meeting.id}@connekt.net.in`;
 
   const icsLines = [
     'BEGIN:VCALENDAR',
@@ -74,7 +74,7 @@ async function sendMeetingInvitation({ meeting, hostUser, recipients = [], baseU
   if (!recipients || recipients.length === 0) return { success: true, count: 0 };
 
   const hostName = hostUser?.personalProfile?.fullName || hostUser?.username || 'CONNEKT Host';
-  const hostEmail = hostUser?.email || 'noreply@connekt.me';
+  const hostEmail = hostUser?.email || 'noreply@connekt.net.in';
   const joinUrl = `${baseUrl}/?join=CNK-${meeting.room_code}`;
   const icsContent = generateICalendar(meeting, hostName, hostEmail, joinUrl);
 

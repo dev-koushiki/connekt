@@ -61,7 +61,7 @@ class _MailScreenState extends State<MailScreen> {
 
   String get _userEmail {
     if (widget.user?.email.isNotEmpty == true) return widget.user!.email;
-    return '${widget.user?.username ?? "user"}@connekt.me';
+    return '${widget.user?.username ?? "user"}@connekt.net.in';
   }
 
   String get _userDisplayName {

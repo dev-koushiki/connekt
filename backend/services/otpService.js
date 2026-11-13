@@ -59,7 +59,7 @@ const createOtp = async (identifier, purpose = 'registration', ipAddress = null)
   if (cleanId.includes('@') && transporter) {
     try {
       await transporter.sendMail({
-        from: process.env.SMTP_FROM || 'CONNEKT Identity <noreply@connekt.me>',
+        from: process.env.SMTP_FROM || 'CONNEKT Identity <noreply@connekt.net.in>',
         to: cleanId,
         subject: `Your CONNEKT Security Code: ${code}`,
         text: `Your security code for ${purpose} is: ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,

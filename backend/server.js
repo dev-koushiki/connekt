@@ -19,6 +19,8 @@ const socialRoutes = require('./routes/socialRoutes');
 const professionalRoutes = require('./routes/professionalRoutes');
 const communityRoutes = require('./routes/communityRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const translateRoutes = require('./routes/translateRoutes');
+const reminderRoutes = require('./routes/reminderRoutes');
 const { apiLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
@@ -90,6 +92,8 @@ app.use('/api/social', socialRoutes);
 app.use('/api/professional', professionalRoutes);
 app.use('/api/communities', communityRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/translate', translateRoutes);
+app.use('/api/reminders', reminderRoutes);
 
 // Fallback routing for SPA / Pages
 app.use((req, res) => {

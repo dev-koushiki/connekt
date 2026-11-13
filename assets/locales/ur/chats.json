@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "حالت",
+  "calls": "کالز",
+  "new_chat": "New بات چیت",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and کالز are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear بات چیت",
+  "delete_chat": "حذف کریں بات چیت",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

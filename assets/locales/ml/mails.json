@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT മെയിൽ",
+  "inbox": "ഇൻബോക്സ്",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "എഴുതുക",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "ഇല്ലാതാക്കുക",
+  "empty_inbox": "Your ഇൻബോക്സ് is clear and up to date!"
+}

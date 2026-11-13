@@ -921,7 +921,7 @@ class MeetingController {
 
       const userProfile = await UserModel.findById(meeting.host_id);
       const hostName = userProfile?.full_name || 'CONNEKT Host';
-      const hostEmail = req.user?.email || 'host@connekt.me';
+      const hostEmail = req.user?.email || 'host@connekt.net.in';
       const origin = req.headers.origin || 'http://localhost:5000';
       const joinUrl = `${origin}/?join=CNK-${meeting.room_code}`;
 

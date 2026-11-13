@@ -5,6 +5,8 @@ import '../config/app_theme.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
+import '../i18n/app_localizations.dart';
+import '../widgets/language_selector_sheet.dart';
 
 class AuthScreen extends StatefulWidget {
   final Function(UserModel user) onAuthSuccess;
@@ -423,10 +425,19 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Top Action Bar (Light/Dark Mood Toggle & Server Settings)
+              // Top Action Bar (Language, Light/Dark Mood Toggle & Server Settings)
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.translate_rounded,
+                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F3B82),
+                      size: 22,
+                    ),
+                    tooltip: context.tr('common.select_language'),
+                    onPressed: () => LanguageSelectorSheet.show(context),
+                  ),
                   IconButton(
                     icon: Icon(
                       isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
@@ -825,7 +836,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 6, left: 4),
                     child: Text(
-                      'Connekt Mail: ${_usernameController.text.trim().toLowerCase()}@connekt.me',
+                      'Connekt Mail: ${_usernameController.text.trim().toLowerCase()}@connekt.net.in',
                       style: TextStyle(
                         color: isDark ? const Color(0xFF60A5FA) : AppTheme.brandBlue,
                         fontSize: 12,

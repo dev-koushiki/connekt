@@ -7,6 +7,10 @@ const { uploadAvatar } = require('../middleware/upload');
 // Mode management
 router.post('/mode', requireAuth, UserController.switchMode);
 
+// Language preference
+router.get('/language', requireAuth, UserController.getLanguage);
+router.put('/language', requireAuth, UserController.updateLanguage);
+
 // Personal Profile
 router.put('/profile/personal', requireAuth, UserController.updatePersonalProfile);
 router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), UserController.uploadAvatar);

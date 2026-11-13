@@ -4,7 +4,7 @@ const { createOtp, verifyOtp } = require('../services/otpService');
 const { generateToken, hashToken } = require('../services/tokenService');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 
-const CONNEKT_DOMAIN = process.env.CONNEKT_DOMAIN || 'connekt.me';
+const CONNEKT_DOMAIN = process.env.CONNEKT_DOMAIN || 'connekt.net.in';
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
 
 /**

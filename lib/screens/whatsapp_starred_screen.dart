@@ -23,7 +23,7 @@ class _WhatsAppStarredScreenState extends State<WhatsAppStarredScreen> {
       'id': 'star_2',
       'sender': 'David Kim',
       'avatar': '',
-      'text': 'Here is the meeting room link: https://connekt.me/meet/team-sync-992',
+      'text': 'Here is the meeting room link: https://connekt.net.in/meet/team-sync-992',
       'time': 'Oct 24, 11:30 am',
     },
     {

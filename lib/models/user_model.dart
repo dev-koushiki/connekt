@@ -5,6 +5,7 @@ class UserModel {
   final String email;
   final String currentMode;
   final String role;
+  final String preferredLanguage;
   final PersonalProfile? personalProfile;
   final ProfessionalProfile? professionalProfile;
   final List<SkillModel> skills;
@@ -19,6 +20,7 @@ class UserModel {
     required this.email,
     required this.currentMode,
     required this.role,
+    this.preferredLanguage = 'en',
     this.personalProfile,
     this.professionalProfile,
     this.skills = const [],
@@ -35,6 +37,7 @@ class UserModel {
       email: json['email'] ?? '',
       currentMode: json['current_mode'] ?? 'common',
       role: json['role'] ?? 'user',
+      preferredLanguage: json['preferred_language'] ?? json['preferredLanguage'] ?? 'en',
       personalProfile: json['personalProfile'] != null
           ? PersonalProfile.fromJson(json['personalProfile'])
           : null,
@@ -67,6 +70,7 @@ class UserModel {
       'email': email,
       'current_mode': currentMode,
       'role': role,
+      'preferred_language': preferredLanguage,
       if (personalProfile != null) 'personalProfile': personalProfile!.toJson(),
       if (professionalProfile != null) 'professionalProfile': professionalProfile!.toJson(),
       'skills': skills.map((s) => s.toJson()).toList(),
@@ -84,6 +88,7 @@ class UserModel {
     String? email,
     String? currentMode,
     String? role,
+    String? preferredLanguage,
     PersonalProfile? personalProfile,
     ProfessionalProfile? professionalProfile,
     List<SkillModel>? skills,
@@ -98,6 +103,7 @@ class UserModel {
       email: email ?? this.email,
       currentMode: currentMode ?? this.currentMode,
       role: role ?? this.role,
+      preferredLanguage: preferredLanguage ?? this.preferredLanguage,
       personalProfile: personalProfile ?? this.personalProfile,
       professionalProfile: professionalProfile ?? this.professionalProfile,
       skills: skills ?? this.skills,

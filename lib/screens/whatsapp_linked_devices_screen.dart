@@ -49,7 +49,7 @@ class _WhatsAppLinkedDevicesScreenState extends State<WhatsAppLinkedDevicesScree
             ),
             const SizedBox(height: 8),
             const Text(
-              'Open web.connekt.me on your computer and point your camera to scan the QR code.',
+              'Open web.connekt.net.in on your computer and point your camera to scan the QR code.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
             ),

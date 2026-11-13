@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "ಸ್ಥಿತಿ",
+  "calls": "ಕರೆಗಳು",
+  "new_chat": "New ಚಾಟ್",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and ಕರೆಗಳು are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear ಚಾಟ್",
+  "delete_chat": "ಅಳಿಸಿ ಚಾಟ್",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

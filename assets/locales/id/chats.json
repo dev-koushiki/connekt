@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "Status",
+  "calls": "Panggilan",
+  "new_chat": "New Obrolan",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and Panggilan are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear Obrolan",
+  "delete_chat": "Hapus Obrolan",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

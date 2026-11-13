@@ -11,6 +11,7 @@ import '../config/subnet_probe_stub.dart' if (dart.library.io) '../config/subnet
 import '../services/api_service.dart';
 import '../services/voice_audio_service.dart';
 import '../widgets/safe_avatar.dart';
+import '../widgets/translatable_text_widget.dart';
 
 class ChatScreen extends StatefulWidget {
   final String contactName;
@@ -1367,6 +1368,16 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         }
         return RichText(text: TextSpan(children: spans));
       }
+    }
+
+    if (!isMe && rawText.trim().isNotEmpty) {
+      return TranslatableTextWidget(
+        text: rawText,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 14,
+        ),
+      );
     }
 
     return Text(

@@ -26,6 +26,45 @@ class UserController {
   }
 
   /**
+   * Update preferred language for the authenticated user
+   */
+  static async updateLanguage(req, res) {
+    try {
+      const { language } = req.body;
+      if (!language || typeof language !== 'string') {
+        return errorResponse(res, 400, 'Language code is required.');
+      }
+
+      const langCode = language.trim().toLowerCase();
+      await UserModel.updatePreferredLanguage(req.user.id, langCode);
+      const user = await UserModel.findById(req.user.id);
+
+      return successResponse(res, 200, 'Language updated successfully.', {
+        preferredLanguage: langCode,
+        user
+      });
+    } catch (err) {
+      console.error('[Update Language Error]:', err);
+      return errorResponse(res, 500, 'Failed to update preferred language.');
+    }
+  }
+
+  /**
+   * Get preferred language for the authenticated user
+   */
+  static async getLanguage(req, res) {
+    try {
+      const user = await UserModel.findById(req.user.id);
+      return successResponse(res, 200, 'Preferred language retrieved.', {
+        preferredLanguage: user?.preferred_language || 'en'
+      });
+    } catch (err) {
+      console.error('[Get Language Error]:', err);
+      return errorResponse(res, 500, 'Failed to retrieve preferred language.');
+    }
+  }
+
+  /**
    * Update personal profile information
    */
   static async updatePersonalProfile(req, res) {
@@ -370,8 +409,8 @@ class UserController {
       const formattedPhone = normalizePhoneNumber(rawPhone) || rawPhone;
       const inviterLabel = req.user.username ? `@${req.user.username}` : 'Your contact';
       const inviteMessage = contactName
-        ? `Hi ${contactName}, ${inviterLabel} invited you to chat on CONNEKT! Join here: https://connekt.me`
-        : `${inviterLabel} invited you to chat on CONNEKT! Join here: https://connekt.me`;
+        ? `Hi ${contactName}, ${inviterLabel} invited you to chat on CONNEKT! Join here: https://connekt.net.in`
+        : `${inviterLabel} invited you to chat on CONNEKT! Join here: https://connekt.net.in`;
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS app_invitations (

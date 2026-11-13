@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
+import '../i18n/app_localizations.dart';
+import '../services/i18n_service.dart';
+import '../widgets/language_selector_sheet.dart';
 
 class WhatsAppSettingsScreen extends StatefulWidget {
   final VoidCallback? onClearAllChats;
@@ -274,6 +277,25 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // App Language Section
+          _buildSectionHeader(context.tr('common.language').toUpperCase()),
+          Container(
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.language_rounded, color: Color(0xFF1D4ED8)),
+              title: Text(context.tr('common.language'), style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
+              subtitle: Text(I18nService.currentLanguage.displayTitle, style: TextStyle(color: textSecondary, fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => LanguageSelectorSheet.show(context),
             ),
           ),
 

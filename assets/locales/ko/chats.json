@@ -1,0 +1,19 @@
+{
+  "title": "Chats",
+  "status": "상태",
+  "calls": "통화",
+  "new_chat": "New 채팅",
+  "type_message": "Type a message...",
+  "send": "Send",
+  "encrypted": "Messages and 통화 are end-to-end encrypted",
+  "yesterday": "Yesterday",
+  "today": "Today",
+  "archived": "Archived",
+  "starred": "Starred Messages",
+  "linked_devices": "Linked Devices",
+  "payments": "Payments",
+  "clear_chat": "Clear 채팅",
+  "delete_chat": "삭제 채팅",
+  "voice_message": "Voice Message",
+  "no_chats": "No conversations yet. Tap + to connect!"
+}

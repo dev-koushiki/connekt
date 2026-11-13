@@ -43,7 +43,7 @@ class MailService {
   static List<MailMessage> starterMessages(UserModel? user) {
     final userMail = user?.email.isNotEmpty == true
         ? user!.email
-        : '${user?.username ?? "user"}@connekt.me';
+        : '${user?.username ?? "user"}@connekt.net.in';
     final now = DateTime.now();
 
     return [
@@ -51,7 +51,7 @@ class MailService {
         id: 'm_sec_1',
         threadId: 'thr_sec_1',
         senderName: 'CONNEKT Security Team',
-        senderEmail: 'security@connekt.me',
+        senderEmail: 'security@connekt.net.in',
         to: [userMail],
         subject: 'Welcome to CONNEKT – Account Setup & Security Keys',
         body: 'Hi ${user?.personalProfile?.fullName ?? user?.username ?? "there"},\n\n'
@@ -80,9 +80,9 @@ class MailService {
         id: 'm_road_1',
         threadId: 'thr_road_1',
         senderName: 'Alex Chen (Product Lead)',
-        senderEmail: 'alex.chen@connekt.me',
+        senderEmail: 'alex.chen@connekt.net.in',
         to: [userMail],
-        cc: const ['team@connekt.me'],
+        cc: const ['team@connekt.net.in'],
         subject: 'Q4 Mobile Ecosystem Launch Roadmap & Specifications',
         body: 'Hi team,\n\nPlease review the updated engineering milestones for the mobile release.\n'
             'Can you confirm whether the design assets are finalized for Friday\'s sync?',
@@ -109,8 +109,8 @@ class MailService {
         threadId: 'thr_road_1',
         inReplyTo: 'm_road_1',
         senderName: 'Lena Rivers',
-        senderEmail: 'lena.rivers@connekt.me',
-        to: ['alex.chen@connekt.me', userMail],
+        senderEmail: 'lena.rivers@connekt.net.in',
+        to: ['alex.chen@connekt.net.in', userMail],
         subject: 'Re: Q4 Mobile Ecosystem Launch Roadmap & Specifications',
         body: 'Design assets and component specs are uploaded! Looking forward to Friday\'s schedule review.',
         snippet: 'Design assets and component specs are uploaded! Looking forward to Friday\'s schedule review.',
@@ -127,7 +127,7 @@ class MailService {
         id: 'm_soc_1',
         threadId: 'thr_soc_1',
         senderName: 'CONNEKT Community',
-        senderEmail: 'community@connekt.me',
+        senderEmail: 'community@connekt.net.in',
         to: [userMail],
         subject: 'New team highlights in CONNEKT Workspace',
         body: 'Your colleagues shared 4 collaborative notes and meeting summaries this week.',
@@ -145,7 +145,7 @@ class MailService {
         id: 'm_promo_1',
         threadId: 'thr_promo_1',
         senderName: 'Cloud Infrastructure Digest',
-        senderEmail: 'updates@connekt.me',
+        senderEmail: 'updates@connekt.net.in',
         to: [userMail],
         subject: 'Weekly Cloud Diagnostics & Productivity Tips',
         body: 'All systems nominal with 99.98% uptime. Try swiping messages left or right to archive or delete in one gesture.',

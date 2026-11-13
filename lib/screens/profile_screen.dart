@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -10,6 +9,9 @@ import '../config/app_theme.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
+import '../services/i18n_service.dart';
+import '../i18n/app_localizations.dart';
+import '../widgets/language_selector_sheet.dart';
 import '../widgets/safe_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -1314,7 +1316,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       const Icon(Icons.alternate_email_rounded, size: 13, color: Color(0xFF64748B)),
                       const SizedBox(width: 6),
                       Text(
-                        user?.email ?? 'user@connekt.me',
+                        user?.email ?? 'user@connekt.net.in',
                         style: TextStyle(color: secondaryTextColor, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -1393,7 +1395,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         onTap: () => _handleModeSwitch(mode),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFF0F3B82) : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
@@ -1415,13 +1417,17 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 size: 14,
                 color: isSelected ? Colors.white : (isDark ? Colors.white60 : const Color(0xFF64748B)),
               ),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected ? Colors.white : (isDark ? Colors.white70 : const Color(0xFF64748B)),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : (isDark ? Colors.white70 : const Color(0xFF64748B)),
+                  ),
                 ),
               ),
             ],
@@ -1447,10 +1453,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         ),
         child: Row(
           children: [
-            _buildTabPill(0, 'Personal', Icons.person_outline_rounded, isDark),
-            _buildTabPill(1, 'Career', Icons.work_outline_rounded, isDark),
-            _buildTabPill(2, 'Security', Icons.shield_outlined, isDark, hasBadge: _pinEnabled || _biometricEnabled),
-            _buildTabPill(3, 'Settings', Icons.tune_rounded, isDark),
+            _buildTabPill(0, context.tr('profile.personal'), Icons.person_outline_rounded, isDark),
+            _buildTabPill(1, context.tr('profile.career'), Icons.work_outline_rounded, isDark),
+            _buildTabPill(2, context.tr('profile.security'), Icons.shield_outlined, isDark, hasBadge: _pinEnabled || _biometricEnabled),
+            _buildTabPill(3, context.tr('profile.settings'), Icons.tune_rounded, isDark),
           ],
         ),
       ),
@@ -1468,7 +1474,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 3),
           decoration: BoxDecoration(
             color: isSelected ? Colors.white : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
@@ -1485,31 +1491,42 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 15,
-                color: isSelected ? const Color(0xFF0F3B82) : (isDark ? Colors.white60 : const Color(0xFF64748B)),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    size: 14,
+                    color: isSelected ? const Color(0xFF0F3B82) : (isDark ? Colors.white60 : const Color(0xFF64748B)),
+                  ),
+                  if (hasBadge)
+                    Positioned(
+                      right: -1,
+                      top: -1,
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF22C55E),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                  color: isSelected ? const Color(0xFF0F3B82) : (isDark ? Colors.white70 : const Color(0xFF64748B)),
-                ),
-              ),
-              if (hasBadge) ...[
-                const SizedBox(width: 4),
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF22C55E),
-                    shape: BoxShape.circle,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    color: isSelected ? const Color(0xFF0F3B82) : (isDark ? Colors.white70 : const Color(0xFF64748B)),
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -2052,6 +2069,126 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   _buildThemeOption(mode: ThemeMode.light, current: currentMode, label: 'Light Mood', icon: Icons.light_mode_rounded),
                   _buildThemeOption(mode: ThemeMode.system, current: currentMode, label: 'System', icon: Icons.brightness_auto_rounded),
                 ],
+              ),
+            );
+          },
+        ),
+
+        const SizedBox(height: 24),
+
+        Text(
+          context.tr('profile.language_preference'),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: primaryTextColor),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Select your preferred language across 22 global and Indian languages',
+          style: TextStyle(fontSize: 12, color: mutedTextColor),
+        ),
+        const SizedBox(height: 10),
+        ValueListenableBuilder<Locale>(
+          valueListenable: I18nService.localeNotifier,
+          builder: (context, currentLocale, _) {
+            final lang = I18nService.currentLanguage;
+            return InkWell(
+              onTap: () => LanguageSelectorSheet.show(context),
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF151F33) : Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF0F3B82), Color(0xFF2563EB)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        lang.flagEmoji,
+                        style: const TextStyle(fontSize: 22),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                lang.nativeName,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryTextColor,
+                                ),
+                              ),
+                              if (lang.isRtl) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE0E7FF),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'RTL',
+                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF3730A3)),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            lang.name,
+                            style: TextStyle(fontSize: 12.5, color: mutedTextColor),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFBFDBFE),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.translate_rounded,
+                            size: 14,
+                            color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            context.tr('common.edit'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

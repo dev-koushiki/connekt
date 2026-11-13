@@ -16,6 +16,7 @@ import 'whatsapp_starred_screen.dart';
 import 'whatsapp_linked_devices_screen.dart';
 import 'whatsapp_payments_screen.dart';
 import 'whatsapp_settings_screen.dart';
+import '../i18n/app_localizations.dart';
 
 class ChatsScreen extends StatefulWidget {
   final UserModel? user;
@@ -1097,8 +1098,8 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
 
       setSheetState(() => sendingInviteKeys.add(key));
       String inviteMsg = name.isNotEmpty
-          ? 'Hi $name, join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me'
-          : 'Join me on CONNEKT for chats, calls, meetings & mails! https://connekt.me';
+          ? 'Hi $name, join me on CONNEKT for chats, calls, meetings & mails! https://connekt.net.in'
+          : 'Join me on CONNEKT for chats, calls, meetings & mails! https://connekt.net.in';
       bool sentViaGateway = false;
 
       if (!isFlutterTestEnv) {
@@ -1576,7 +1577,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   // ====================================================================
 
   void _showCreateCallLinkSheet() {
-    final link = 'https://connekt.me/call/${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final link = 'https://connekt.net.in/call/${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
     showModalBottomSheet<void>(
       context: context,
@@ -1760,7 +1761,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                         children: [
                           const Icon(Icons.chat_bubble_rounded, size: 15),
                           const SizedBox(width: 4),
-                          const Text('Messages', maxLines: 1, softWrap: false),
+                          Text(context.tr('chats.title'), maxLines: 1, softWrap: false),
                           if (totalUnreadChats > 0) ...[
                             const SizedBox(width: 4),
                             Container(
@@ -1779,16 +1780,16 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                       ),
                     ),
                   ),
-                  const Tab(
+                  Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('Updates', maxLines: 1, softWrap: false),
+                      child: Text(context.tr('chats.status'), maxLines: 1, softWrap: false),
                     ),
                   ),
-                  const Tab(
+                  Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('Calls', maxLines: 1, softWrap: false),
+                      child: Text(context.tr('chats.calls'), maxLines: 1, softWrap: false),
                     ),
                   ),
                 ],

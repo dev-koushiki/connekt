@@ -1,0 +1,20 @@
+{
+  "title": "CONNEKT E-Mail",
+  "inbox": "Posteingang",
+  "primary": "Primary",
+  "social": "Social",
+  "promotions": "Promotions",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "spam": "Spam",
+  "trash": "Trash",
+  "compose": "Verfassen",
+  "to": "To",
+  "subject": "Subject",
+  "reply": "Reply",
+  "forward": "Forward",
+  "archive": "Archive",
+  "delete": "Löschen",
+  "empty_inbox": "Your Posteingang is clear and up to date!"
+}

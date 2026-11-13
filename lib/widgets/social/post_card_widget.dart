@@ -4,6 +4,7 @@ import '../../config/app_theme.dart';
 import '../../models/social_models.dart';
 import '../../services/social_service.dart';
 import '../safe_avatar.dart';
+import '../translatable_text_widget.dart';
 
 class PostCardWidget extends StatelessWidget {
   final SocialPost post;
@@ -241,8 +242,8 @@ class PostCardWidget extends StatelessWidget {
 
           if (post.content.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              post.content,
+            TranslatableTextWidget(
+              text: post.content,
               style: TextStyle(color: textPrimary, fontSize: 14.2, height: 1.45),
             ),
           ],

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const db = require('../config/database');
 const externalMailService = require('../services/externalMailService');
+const CONNEKT_DOMAIN = (process.env.CONNEKT_DOMAIN || 'connekt.net.in').toLowerCase();
 
 let tableInitPromise = null;
 
@@ -220,7 +221,7 @@ class MailModel {
         [userId]
       );
       if (existingCountRes.rows[0].cnt === 0) {
-        const userMail = (user.email || `${user.username || 'user'}@connekt.me`).toLowerCase();
+        const userMail = (user.email || `${user.username || 'user'}@${CONNEKT_DOMAIN}`).toLowerCase();
         const welcomeThread = `thr_welcome_${userId.slice(0, 8)}`;
         await client.query(
           `INSERT INTO mail_messages (
@@ -229,21 +230,21 @@ class MailModel {
             is_unread, is_starred, is_important
           ) VALUES
           (
-            $1, $2, 'CONNEKT Mail Team', 'mail-team@connekt.me', $3::jsonb,
+            $1, $2, 'CONNEKT Mail Team', 'mail-team@connekt.net.in', $3::jsonb,
             'Welcome to your new Connekt Mail inbox',
             'Hi there,\n\nYour Connekt Mail workspace now supports full Google Mail workflows including Primary/Social/Promotions tabs, conversation threads, custom labels, scheduled send, snooze, confidential mode, attachments, and vacation auto-replies.\n\nReply directly to any message or tap Compose to get started.',
             'Your Connekt Mail workspace now supports full Google Mail workflows including Primary/Social/Promotions tabs, threads, labels, snooze, and more.',
             'inbox', 'inbox', 'primary', '["Work"]'::jsonb, true, true, true
           ),
           (
-            $1, $4, 'CONNEKT Community', 'community@connekt.me', $3::jsonb,
+            $1, $4, 'CONNEKT Community', 'community@connekt.net.in', $3::jsonb,
             'Connect with colleagues across Meetings & Chats',
             'Discover how teammates collaborate in CONNEKT across HD meetings, SMS-bridged chats, and real-time mail.',
             'Discover how teammates collaborate in CONNEKT across HD meetings, SMS-bridged chats, and real-time mail.',
             'inbox', 'inbox', 'social', '["Personal"]'::jsonb, true, false, false
           ),
           (
-            $1, $5, 'CONNEKT Cloud Workspace', 'updates@connekt.me', $3::jsonb,
+            $1, $5, 'CONNEKT Cloud Workspace', 'updates@connekt.net.in', $3::jsonb,
             'Smart Workspace Tips: Keyboard & Swipe Productivity',
             'Tip: Swipe emails right to archive or left to delete. Customize swipe actions, signatures, and Out-of-Office auto-replies inside Mail Settings.',
             'Tip: Swipe emails right to archive or left to delete. Customize swipe actions and signatures inside Mail Settings.',
@@ -382,6 +383,7 @@ class MailModel {
          FROM users u
          LEFT JOIN user_profiles p ON p.user_id = u.id
          WHERE LOWER(u.email) = LOWER($1)
+            OR LOWER(u.username || '@connekt.net.in') = LOWER($1)
             OR LOWER(u.username || '@connekt.me') = LOWER($1)
          LIMIT 1`,
         [recipientEmail]
@@ -581,7 +583,7 @@ class MailModel {
       'CONNEKT User';
     const fromEmail = (
       senderUser.email ||
-      `${senderUser.username || 'user'}@connekt.me`
+      `${senderUser.username || 'user'}@${CONNEKT_DOMAIN}`
     ).toLowerCase();
 
     const toList = parseAddressList(payload.to);
@@ -1069,6 +1071,7 @@ class MailModel {
       const userRes = await db.query(
         `SELECT id, username, email FROM users
          WHERE LOWER(email) = LOWER($1)
+            OR LOWER(username || '@connekt.net.in') = LOWER($1)
             OR LOWER(username || '@connekt.me') = LOWER($1)
          LIMIT 1`,
         [addr]

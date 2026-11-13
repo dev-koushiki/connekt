@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 import '../services/call_log_service.dart';
 import '../widgets/safe_avatar.dart';
 import '../widgets/meetings_illustration.dart';
+import '../i18n/app_localizations.dart';
 import 'meeting_call_screen.dart';
 
 class MeetingsScreen extends StatefulWidget {
@@ -295,7 +296,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                 Navigator.pop(ctx);
                 _startCall(
                   contactName: 'Instant Meeting ($roomCode)',
-                  contactEmail: widget.user?.email ?? 'host@connekt.me',
+                  contactEmail: widget.user?.email ?? 'host@connekt.net.in',
                   avatarUrl: widget.user?.personalProfile?.avatarUrl ?? '',
                   isVideo: true,
                 );
@@ -987,18 +988,18 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                                 ],
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: const Row(
+                              child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.video_call_rounded, color: Colors.white, size: 20),
-                                  SizedBox(width: 6),
+                                  const Icon(Icons.video_call_rounded, color: Colors.white, size: 20),
+                                  const SizedBox(width: 6),
                                   Flexible(
                                     child: Text(
-                                      'Start instant meeting',
+                                      context.tr('meetings.start_instant_meeting'),
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.bold,
@@ -1043,7 +1044,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                                   const SizedBox(width: 6),
                                   Flexible(
                                     child: Text(
-                                      'Schedule meeting',
+                                      context.tr('meetings.schedule_meeting'),
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
