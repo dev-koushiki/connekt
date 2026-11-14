@@ -670,6 +670,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => WhatsAppSettingsScreen(
+              user: widget.user,
+              onAvatarUpdated: (newUrl) {
+                if (mounted) setState(() {});
+              },
               onClearAllChats: () {
                 setState(() => _conversations.clear());
               },
