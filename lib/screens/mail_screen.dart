@@ -1010,21 +1010,6 @@ class _MailScreenState extends State<MailScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: bgColor,
-      drawer: MailDrawer(
-        userEmail: _userEmail,
-        selectedView: _selectedView,
-        allMessages: _messages,
-        labels: _labels,
-        onSelectView: (v) => setState(() {
-          _selectedView = v;
-          _selectedThreadIds.clear();
-        }),
-        onCreateLabel: _showCreateLabelDialog,
-        onDeleteLabel: _deleteLabel,
-        onOpenSettings: _openSettings,
-        onOpenContacts: _openContactsSheet,
-        onBackToHome: widget.onBackToHome,
-      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppTheme.brandBlue,
         foregroundColor: Colors.white,
@@ -1143,6 +1128,25 @@ class _MailScreenState extends State<MailScreen> {
     );
   }
 
+  void _openMailFoldersBottomSheet() {
+    MailDrawer.showAsBottomSheet(
+      context: context,
+      userEmail: _userEmail,
+      selectedView: _selectedView,
+      allMessages: _messages,
+      labels: _labels,
+      onSelectView: (v) => setState(() {
+        _selectedView = v;
+        _selectedThreadIds.clear();
+      }),
+      onCreateLabel: _showCreateLabelDialog,
+      onDeleteLabel: _deleteLabel,
+      onOpenSettings: _openSettings,
+      onOpenContacts: _openContactsSheet,
+      onBackToHome: widget.onBackToHome,
+    );
+  }
+
   Widget _buildSearchTopBar(Color cardColor, Color borderColor, Color textPrimary, Color textSecondary) {
     final userInitial = _userDisplayName.isNotEmpty ? _userDisplayName[0].toUpperCase() : 'U';
     return Padding(
@@ -1165,7 +1169,7 @@ class _MailScreenState extends State<MailScreen> {
             IconButton(
               icon: Icon(Icons.menu_rounded, color: textPrimary),
               tooltip: 'Open mail folders',
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              onPressed: _openMailFoldersBottomSheet,
             ),
             Expanded(
               child: TextField(

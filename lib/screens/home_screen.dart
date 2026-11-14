@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../services/call_log_service.dart';
 import '../services/api_service.dart';
+import '../services/theme_service.dart';
+import '../config/app_theme.dart';
 import 'calendar_scheduler_screen.dart';
 
 class ReminderItem {
@@ -1226,78 +1228,553 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ===========================================================================
-  // MAIN BUILD METHOD (Matches Image 1 Layout & Visuals Exactly)
+  // MAIN BUILD METHOD
   // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppVisualTheme>(
+      valueListenable: ThemeService.visualThemeNotifier,
+      builder: (context, currentVisual, _) {
+        final isMidnight = currentVisual == AppVisualTheme.midnightGold;
+        final isLuxury = currentVisual == AppVisualTheme.luxuryGold;
+        final isGoldTheme = isMidnight || isLuxury;
+        final isDark = ThemeService.isDark(context);
+
+        if (isGoldTheme) {
+          return _buildGoldThemeHomeScreen(context, isLuxury: isLuxury);
+        }
+
+        return Scaffold(
+          backgroundColor: isDark ? AppTheme.bgDark : Colors.white,
+          body: SafeArea(
+            child: Column(
+              children: [
+                // -----------------------------------------------------------------
+                // 1. TOP HEADER BANNER: High-Tech Cyber Network + CONNEKT + Language
+                // -----------------------------------------------------------------
+                _buildHeaderBanner(context),
+
+                // -----------------------------------------------------------------
+                // 2. SCROLLABLE BODY CONTENT (Widgets, Profile Card, Large Action Cards, Vibe)
+                // -----------------------------------------------------------------
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Column(
+                      children: [
+                        // TOP WIDGETS ROW (Scheduler on Left + 3 Stacked Cards on Right)
+                        _buildTopWidgetsSection(context),
+
+                        const SizedBox(height: 12),
+
+                        // MIDDLE USER PROFILE / CONNEKT CARD
+                        _buildConnektUserCard(context),
+
+                        const SizedBox(height: 12),
+
+                        // MAIN MODULE ACTION CARDS (Chat, Mail, Meeting)
+                        _buildMainActionCard(
+                          icon: Icons.chat_bubble_rounded,
+                          title: 'Chat',
+                          badgeCount: 0,
+                          onTap: () => widget.onNavigateToTab?.call(2), // Chats tab
+                        ),
+                        const SizedBox(height: 10),
+                        _buildMainActionCard(
+                          icon: Icons.mail_rounded,
+                          title: 'Mail',
+                          badgeCount: 0,
+                          onTap: () => widget.onNavigateToTab?.call(3), // Mail tab
+                        ),
+                        const SizedBox(height: 10),
+                        _buildMainActionCard(
+                          icon: Icons.videocam_rounded,
+                          title: 'Meeting',
+                          badgeCount: 0,
+                          onTap: () => widget.onNavigateToTab?.call(1), // Meetings tab
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // "vibe" BANNER
+                        _buildVibeBanner(context),
+
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // -----------------------------------------------------------------
+                // 3. BOTTOM NAVIGATION BAR (Profile, Notifications, Vibe, Menu)
+                // -----------------------------------------------------------------
+                _buildBottomBar(context),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // GOLD THEME HOME SCREEN (Matches Mockups in Images 2 & 3 Exactly)
+  // ===========================================================================
+
+  Widget _buildGoldThemeHomeScreen(BuildContext context, {required bool isLuxury}) {
+    // Theme Palette
+    final goldBorderColor = isLuxury ? const Color(0xFFC59B47) : const Color(0xFFD4AF37);
+    final goldAccentColor = isLuxury ? const Color(0xFFDFB76C) : const Color(0xFFF5D061);
+    final cardBgColor = isLuxury ? const Color(0xFF131316) : const Color(0xFF0C1935);
+    final bgGradient = isLuxury
+        ? const LinearGradient(
+            colors: [Color(0xFF060608), Color(0xFF0D0D12), Color(0xFF060608)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          )
+        : const LinearGradient(
+            colors: [Color(0xFF030713), Color(0xFF07142E), Color(0xFF040A1A)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          );
+
+    final personalName = widget.user?.personalProfile?.displayName.trim();
+    final userName = (personalName != null && personalName.isNotEmpty)
+        ? personalName
+        : (widget.user?.username.trim().isNotEmpty == true
+            ? widget.user!.username.trim()
+            : 'User');
+
+    final avatarLetter = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
+
+    final goldGridItems = [
+      {
+        'title': 'Chat',
+        'icon': Icons.chat_bubble_rounded,
+        'onTap': () => widget.onNavigateToTab?.call(2),
+      },
+      {
+        'title': 'Mail',
+        'icon': Icons.mail_rounded,
+        'onTap': () => widget.onNavigateToTab?.call(3),
+      },
+      {
+        'title': 'Meeting',
+        'icon': Icons.videocam_rounded,
+        'onTap': () => widget.onNavigateToTab?.call(1),
+      },
+      {
+        'title': 'Reminder',
+        'icon': Icons.notifications_rounded,
+        'onTap': () => _showRemindersSheet(context),
+      },
+      {
+        'title': 'Scheduler',
+        'icon': Icons.calendar_month_rounded,
+        'onTap': () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (ctx) => CalendarSchedulerScreen(
+                user: widget.user,
+              ),
+            ),
+          );
+        },
+      },
+      {
+        'title': 'Quick Notes',
+        'icon': Icons.edit_note_rounded,
+        'onTap': () => _showQuickNotesSheet(context),
+      },
+    ];
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // -----------------------------------------------------------------
-            // 1. TOP HEADER BANNER: High-Tech Cyber Network + CONNEKT + Language
-            // -----------------------------------------------------------------
-            _buildHeaderBanner(context),
-
-            // -----------------------------------------------------------------
-            // 2. SCROLLABLE BODY CONTENT (Widgets, Profile Card, Large Action Cards, Vibe)
-            // -----------------------------------------------------------------
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: bgGradient,
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ---------------------------------------------------------------
+              // TOP GOLD HEADER: Polished Logo & Translation Icon
+              // ---------------------------------------------------------------
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                child: Row(
                   children: [
-                    // TOP WIDGETS ROW (Scheduler on Left + 3 Stacked Cards on Right)
-                    _buildTopWidgetsSection(context),
-
-                    const SizedBox(height: 12),
-
-                    // MIDDLE USER PROFILE / CONNEKT CARD
-                    _buildConnektUserCard(context),
-
-                    const SizedBox(height: 12),
-
-                    // MAIN MODULE ACTION CARDS (Chat, Mail, Meeting)
-                    _buildMainActionCard(
-                      icon: Icons.chat_bubble_rounded,
-                      title: 'Chat',
-                      badgeCount: 0,
-                      onTap: () => widget.onNavigateToTab?.call(2), // Chats tab
+                    const SizedBox(width: 38), // Center balance
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'CONNEKT',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: goldAccentColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2.8,
+                              shadows: [
+                                Shadow(
+                                  color: goldAccentColor.withValues(alpha: 0.45),
+                                  blurRadius: 10,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'CONNECTING THE UNCONNECTED',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: goldAccentColor.withValues(alpha: 0.8),
+                              fontSize: 7.2,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 2.0,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _buildMainActionCard(
-                      icon: Icons.mail_rounded,
-                      title: 'Mail',
-                      badgeCount: 0,
-                      onTap: () => widget.onNavigateToTab?.call(3), // Mail tab
+                    // Language Translation Button (Matches top-right in images)
+                    GestureDetector(
+                      onTap: () => _showLanguageSheet(context),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: cardBgColor.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: goldBorderColor.withValues(alpha: 0.5),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: goldBorderColor.withValues(alpha: 0.15),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.translate_rounded,
+                            color: goldAccentColor,
+                            size: 19,
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _buildMainActionCard(
-                      icon: Icons.videocam_rounded,
-                      title: 'Meeting',
-                      badgeCount: 0,
-                      onTap: () => widget.onNavigateToTab?.call(1), // Meetings tab
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // "vibe" BANNER
-                    _buildVibeBanner(context),
-
-                    const SizedBox(height: 16),
                   ],
                 ),
               ),
-            ),
 
-            // -----------------------------------------------------------------
-            // 3. BOTTOM NAVIGATION BAR (Profile, Notifications, Vibe, Menu)
-            // -----------------------------------------------------------------
-            _buildBottomBar(context),
-          ],
+              // ---------------------------------------------------------------
+              // SCROLLABLE BODY (User Profile Card, 6 Grid Cards, Vibe Banner)
+              // ---------------------------------------------------------------
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    children: [
+                      // 1. User Profile Glass Card
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: cardBgColor.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: goldBorderColor.withValues(alpha: 0.55),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: goldBorderColor.withValues(alpha: 0.16),
+                              blurRadius: 14,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: isLuxury
+                                      ? [const Color(0xFFDFB76C), const Color(0xFFB38938)]
+                                      : [const Color(0xFFF5D061), const Color(0xFFD4AF37)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: goldAccentColor.withValues(alpha: 0.45),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                avatarLetter,
+                                style: const TextStyle(
+                                  color: Color(0xFF141416),
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Hi, $userName',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _connektEmail,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: goldAccentColor.withValues(alpha: 0.85),
+                                      fontSize: 12,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.35)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircleAvatar(radius: 3.5, backgroundColor: Color(0xFF10B981)),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'Online',
+                                    style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // 2. The 6 Main App Grid Cards (3 columns x 2 rows)
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.96,
+                        ),
+                        itemCount: goldGridItems.length,
+                        itemBuilder: (context, idx) {
+                          final item = goldGridItems[idx];
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: item['onTap'] as VoidCallback,
+                              borderRadius: BorderRadius.circular(18),
+                              splashColor: goldAccentColor.withValues(alpha: 0.2),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
+                                decoration: BoxDecoration(
+                                  color: cardBgColor.withValues(alpha: 0.78),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: goldBorderColor.withValues(alpha: 0.48),
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: goldBorderColor.withValues(alpha: 0.12),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      item['icon'] as IconData,
+                                      size: 32,
+                                      color: goldAccentColor,
+                                    ),
+                                    const SizedBox(height: 9),
+                                    Text(
+                                      item['title'] as String,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: goldAccentColor,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // 3. Vibe Gold Banner
+                      InkWell(
+                        onTap: () => widget.onNavigateToTab?.call(4), // Social / Vibe
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: cardBgColor.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: goldBorderColor.withValues(alpha: 0.55),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: goldBorderColor.withValues(alpha: 0.18),
+                                blurRadius: 12,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Vibe',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                      color: goldAccentColor,
+                                      letterSpacing: 0.8,
+                                      shadows: [
+                                        Shadow(
+                                          color: goldAccentColor.withValues(alpha: 0.4),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.auto_awesome_rounded,
+                                    color: goldAccentColor,
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              Text(
+                                'Your mood: Energetic',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: goldAccentColor.withValues(alpha: 0.9),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.auto_awesome_rounded,
+                                color: goldAccentColor,
+                                size: 13,
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: goldAccentColor,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ---------------------------------------------------------------
+              // BOTTOM NAVIGATION BAR (Home, Chat, Globe, Profile)
+              // ---------------------------------------------------------------
+              Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: (isLuxury ? const Color(0xFF09090C) : const Color(0xFF050C1B)).withValues(alpha: 0.95),
+                  border: Border(
+                    top: BorderSide(
+                      color: goldBorderColor.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.home_rounded, color: goldAccentColor, size: 26),
+                      tooltip: 'Home',
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.chat_bubble_rounded, color: goldAccentColor, size: 24),
+                      tooltip: 'Chat',
+                      onPressed: () => widget.onNavigateToTab?.call(2),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.language_rounded, color: goldAccentColor, size: 25),
+                      tooltip: 'World Clock',
+                      onPressed: () => _showWorldClockSheet(context),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.person_rounded, color: goldAccentColor, size: 26),
+                      tooltip: 'Profile',
+                      onPressed: () => widget.onNavigateToTab?.call(5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

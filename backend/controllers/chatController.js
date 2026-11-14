@@ -69,6 +69,81 @@ const respondToInvite = async (req, res) => {
 };
 
 /**
+ * Update group details (title, description, avatar)
+ */
+const updateGroupDetails = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
+    const { title, description, avatarUrl } = req.body;
+
+    if (!conversationId) {
+      return errorResponse(res, 400, 'Conversation ID is required');
+    }
+
+    const result = await ChatModel.updateGroupDetails({
+      conversationId,
+      userId,
+      title,
+      description,
+      avatarUrl
+    });
+
+    return successResponse(res, 200, 'Group details updated successfully', result);
+  } catch (err) {
+    console.error('[Update Group Details Error]:', err);
+    return errorResponse(res, 500, 'Failed to update group details', err.message);
+  }
+};
+
+/**
+ * Update group participant role (admin / member)
+ */
+const setParticipantRole = async (req, res) => {
+  try {
+    const requestingUserId = req.user.id;
+    const { conversationId } = req.params;
+    const { targetIdentifier, role } = req.body;
+
+    if (!conversationId || !targetIdentifier || !role) {
+      return errorResponse(res, 400, 'Conversation ID, targetIdentifier, and role are required');
+    }
+
+    const result = await ChatModel.setParticipantRole({
+      conversationId,
+      requestingUserId,
+      targetIdentifier,
+      role: role === 'admin' ? 'admin' : 'member'
+    });
+
+    return successResponse(res, 200, `Participant role updated to ${role}`, result);
+  } catch (err) {
+    console.error('[Set Participant Role Error]:', err);
+    return errorResponse(res, 500, 'Failed to set participant role', err.message);
+  }
+};
+
+/**
+ * Mark a conversation as read
+ */
+const markConversationAsRead = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { conversationId } = req.params;
+
+    if (!conversationId) {
+      return errorResponse(res, 400, 'Conversation ID is required');
+    }
+
+    const result = await ChatModel.markConversationAsRead(conversationId, currentUserId);
+    return successResponse(res, 200, 'Conversation marked as read', result);
+  } catch (err) {
+    console.error('[Mark Read Controller Error]:', err);
+    return errorResponse(res, 500, 'Failed to mark conversation as read', err.message);
+  }
+};
+
+/**
  * Get message history for a conversation or target contact (phone / username / group title)
  */
 const getMessages = async (req, res) => {
@@ -342,5 +417,8 @@ module.exports = {
   respondToInvite,
   sendMessage,
   uploadFile,
-  deleteMessage
+  deleteMessage,
+  updateGroupDetails,
+  setParticipantRole,
+  markConversationAsRead
 };

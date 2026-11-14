@@ -18,6 +18,8 @@ class ChatModel {
       LEFT JOIN user_profiles p ON p.user_id = u.id
       WHERE u.id::text = $1
          OR LOWER(u.username) = LOWER($2)
+         OR LOWER(COALESCE(p.display_name, '')) = LOWER($1)
+         OR LOWER(COALESCE(p.full_name, '')) = LOWER($1)
          OR u.phone = $3
          OR u.phone = $4
          OR (LENGTH($5) >= 10 AND u.phone LIKE '%' || $5)
@@ -290,6 +292,115 @@ class ChatModel {
   }
 
   /**
+   * Update group details (title, description, avatar)
+   */
+  static async updateGroupDetails({ conversationId, userId, title, description, avatarUrl }) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const user = await this.findUserByIdentifier(userId);
+      const userName = user?.display_name || user?.full_name || user?.username || 'Admin';
+
+      const updates = [];
+      const values = [];
+      let idx = 1;
+
+      if (title !== undefined && title.trim().length > 0) {
+        updates.push(`title = $${idx++}`);
+        values.push(title.trim());
+      }
+      if (description !== undefined) {
+        updates.push(`description = $${idx++}`);
+        values.push(description.trim());
+      }
+
+      if (updates.length > 0) {
+        values.push(conversationId);
+        await client.query(
+          `UPDATE conversations SET ${updates.join(', ')} WHERE id = $${idx}`,
+          values
+        );
+
+        let changeText = `${userName} updated group info`;
+        if (title && description) {
+          changeText = `${userName} updated group subject and description`;
+        } else if (title) {
+          changeText = `${userName} changed group subject to "${title}"`;
+        } else if (description !== undefined) {
+          changeText = `${userName} updated group description: "${description}"`;
+        }
+
+        await client.query(
+          `INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at)
+           VALUES ($1, $2, $3, true, NOW())`,
+          [conversationId, userId, changeText]
+        );
+
+        await client.query(
+          `UPDATE conversations SET last_message_text = $1, last_message_at = NOW() WHERE id = $2`,
+          [changeText, conversationId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return { success: true };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Update group participant role (admin or member)
+   */
+  static async setParticipantRole({ conversationId, requestingUserId, targetIdentifier, role }) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const reqUser = await this.findUserByIdentifier(requestingUserId);
+      const reqName = reqUser?.display_name || reqUser?.full_name || reqUser?.username || 'Admin';
+
+      let targetUser = await this.findUserByIdentifier(targetIdentifier);
+      if (!targetUser) {
+        targetUser = await this.findOrCreateContactUser(targetIdentifier);
+      }
+      const targetName = targetUser?.display_name || targetUser?.full_name || targetUser?.username || targetIdentifier;
+
+      await client.query(
+        `UPDATE conversation_participants
+         SET role = $1
+         WHERE conversation_id = $2 AND user_id = $3`,
+        [role, conversationId, targetUser.id]
+      );
+
+      const roleMsg = role === 'admin'
+        ? `${targetName} is now a group admin`
+        : `${targetName} is no longer a group admin`;
+
+      await client.query(
+        `INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at)
+         VALUES ($1, $2, $3, true, NOW())`,
+        [conversationId, requestingUserId, roleMsg]
+      );
+
+      await client.query(
+        `UPDATE conversations SET last_message_text = $1, last_message_at = NOW() WHERE id = $2`,
+        [roleMsg, conversationId]
+      );
+
+      await client.query('COMMIT');
+      return { success: true, targetName, role };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * List all conversations for a user with participant profiles & unread counters
    */
   static async getConversationsForUser(userId) {
@@ -422,8 +533,8 @@ class ChatModel {
     `;
     const res = await db.query(query, [conversationId]);
 
-    // Mark unread incoming messages as read if active
-    if (!meta || meta.participant_status === 'accepted') {
+    // Mark unread incoming messages as read if active (for direct chats or accepted groups)
+    if (!meta || meta.type === 'direct' || meta.participant_status === 'accepted' || meta.participant_status == null) {
       await db.query(
         `UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id != $2 AND is_read = false`,
         [conversationId, currentUserId]
@@ -454,6 +565,26 @@ class ChatModel {
       conversation: meta,
       participants: partRes.rows
     };
+  }
+
+  /**
+   * Mark all unread messages in a conversation as read for a user
+   */
+  static async markConversationAsRead(conversationId, userId) {
+    try {
+      await db.query(
+        `UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id != $2 AND is_read = false`,
+        [conversationId, userId]
+      );
+      await db.query(
+        `UPDATE conversation_participants SET unread_count = 0, last_read_at = NOW() WHERE conversation_id = $1 AND user_id = $2`,
+        [conversationId, userId]
+      );
+      return { success: true };
+    } catch (err) {
+      console.error('[Mark Conversation Read Error]:', err);
+      return { success: false, error: err.message };
+    }
   }
 
   /**

@@ -546,7 +546,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 if (!mounted) return;
                                 setState(() => _user = updated);
                                 widget.onUserUpdated?.call(updated);
-                                Navigator.pop(ctx);
+                                if (ctx.mounted) Navigator.pop(ctx);
                                 _showSnack('Profile updated successfully!', color: AppTheme.brandBlue);
                               } catch (e) {
                                 setModalState(() => isSaving = false);
@@ -664,7 +664,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   // Verify confirm step
                   if (currentInput == firstPin) {
                     Future.delayed(const Duration(milliseconds: 250), () {
-                      Navigator.pop(ctx);
+                      if (ctx.mounted) Navigator.pop(ctx);
                       _savePin(currentInput);
                     });
                   } else {
@@ -823,7 +823,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   // Successful unlock!
                   HapticFeedback.mediumImpact();
                   Future.delayed(const Duration(milliseconds: 200), () {
-                    Navigator.pop(ctx);
+                    if (ctx.mounted) Navigator.pop(ctx);
                     _showSnack('Device Unlocked Successfully!', color: const Color(0xFF16A34A));
                   });
                 } else if (_pinCode.isEmpty) {
@@ -1078,74 +1078,101 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final user = _user ?? widget.user;
-    final personal = user?.personalProfile;
-    final prof = user?.professionalProfile;
+    return ValueListenableBuilder<AppVisualTheme>(
+      valueListenable: ThemeService.visualThemeNotifier,
+      builder: (context, currentVisual, _) {
+        final user = _user ?? widget.user;
+        final personal = user?.personalProfile;
+        final prof = user?.professionalProfile;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryTextColor = isDark ? Colors.white : AppTheme.textPrimaryLight;
-    final secondaryTextColor = isDark ? AppTheme.textSecondary : const Color(0xFF475569);
-    final mutedTextColor = isDark ? AppTheme.textMuted : const Color(0xFF64748B);
-    final cardBgColor = isDark ? AppTheme.bgCard : const Color(0xFFF8FAFC);
-    final borderColor = isDark ? const Color(0xFF1E283D) : const Color(0xFFE2E8F0);
+        final isMidnight = currentVisual == AppVisualTheme.midnightGold;
+        final isLuxury = currentVisual == AppVisualTheme.luxuryGold;
+        final isDark = ThemeService.isDark(context);
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B132B) : const Color(0xFFFAFBFD),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        leading: widget.onBackToHome != null
-            ? IconButton(
-                icon: Icon(Icons.arrow_back_rounded, color: primaryTextColor),
-                tooltip: 'Back to Home',
-                onPressed: widget.onBackToHome,
-              )
-            : null,
-        title: Text(
-          'My Profile & Security',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: primaryTextColor,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: AppTheme.brandRed),
-            tooltip: 'Log Out',
-            onPressed: _isLoggingOut ? null : _handleLogout,
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            // HERO PROFILE HEADER CARD
-            _buildHeroProfileHeader(user, personal, isDark, primaryTextColor, secondaryTextColor, borderColor),
+        final primaryTextColor = isDark ? Colors.white : AppTheme.textPrimaryLight;
+        final secondaryTextColor = isMidnight
+            ? const Color(0xFFE5C07B)
+            : isLuxury
+                ? const Color(0xFFDFB76C)
+                : (isDark ? AppTheme.textSecondary : const Color(0xFF475569));
+        final mutedTextColor = isMidnight || isLuxury
+            ? const Color(0xFFB5A48B)
+            : (isDark ? AppTheme.textMuted : const Color(0xFF64748B));
+        final cardBgColor = isMidnight
+            ? const Color(0xFF0E1E3D)
+            : isLuxury
+                ? const Color(0xFF141416)
+                : (isDark ? AppTheme.bgCard : const Color(0xFFF8FAFC));
+        final borderColor = isMidnight
+            ? const Color(0x66D4AF37)
+            : isLuxury
+                ? const Color(0x77C59B47)
+                : (isDark ? const Color(0xFF1E283D) : const Color(0xFFE2E8F0));
+        final scaffoldBg = isMidnight
+            ? const Color(0xFF060E22)
+            : isLuxury
+                ? const Color(0xFF08080A)
+                : (isDark ? const Color(0xFF0B132B) : const Color(0xFFFAFBFD));
 
-            const SizedBox(height: 16),
-
-            // MODE SWITCHER (Personal / Professional / Both Modes)
-            _buildModeSwitcherWidget(isDark, cardBgColor, borderColor),
-
-            const SizedBox(height: 18),
-
-            // MODERN 4-TAB SEGMENTED SELECTOR
-            _buildSegmentedTabBar(isDark, cardBgColor, borderColor),
-
-            const SizedBox(height: 16),
-
-            // TAB CONTENT AREA (Smoothly dynamic without clipping)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _buildActiveTabContent(user, personal, prof, isDark, primaryTextColor, secondaryTextColor, mutedTextColor, cardBgColor, borderColor),
+        return Scaffold(
+          backgroundColor: scaffoldBg,
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            leading: widget.onBackToHome != null
+                ? IconButton(
+                    icon: Icon(Icons.arrow_back_rounded, color: primaryTextColor),
+                    tooltip: 'Back to Home',
+                    onPressed: widget.onBackToHome,
+                  )
+                : null,
+            title: Text(
+              'My Profile & Security',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: primaryTextColor,
+              ),
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, color: AppTheme.brandRed),
+                tooltip: 'Log Out',
+                onPressed: _isLoggingOut ? null : _handleLogout,
+              ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                // HERO PROFILE HEADER CARD
+                _buildHeroProfileHeader(user, personal, isDark, primaryTextColor, secondaryTextColor, borderColor),
 
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
+                const SizedBox(height: 16),
+
+                // MODE SWITCHER (Personal / Professional / Both Modes)
+                _buildModeSwitcherWidget(isDark, cardBgColor, borderColor),
+
+                const SizedBox(height: 18),
+
+                // MODERN 4-TAB SEGMENTED SELECTOR
+                _buildSegmentedTabBar(isDark, cardBgColor, borderColor),
+
+                const SizedBox(height: 16),
+
+                // TAB CONTENT AREA (Smoothly dynamic without clipping)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _buildActiveTabContent(user, personal, prof, isDark, primaryTextColor, secondaryTextColor, mutedTextColor, cardBgColor, borderColor),
+                ),
+
+                const SizedBox(height: 32),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2053,21 +2080,91 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         const SizedBox(height: 4),
         Text('Choose how CONNEKT looks on your phone', style: TextStyle(fontSize: 12, color: mutedTextColor)),
         const SizedBox(height: 12),
-        ValueListenableBuilder<ThemeMode>(
-          valueListenable: ThemeService.themeModeNotifier,
-          builder: (context, currentMode, _) {
+        ValueListenableBuilder<AppVisualTheme>(
+          valueListenable: ThemeService.visualThemeNotifier,
+          builder: (context, currentVisual, _) {
+            final isMidnight = currentVisual == AppVisualTheme.midnightGold;
+            final isLuxury = currentVisual == AppVisualTheme.luxuryGold;
             return Container(
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF151F33) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
+                color: isMidnight
+                    ? const Color(0xFF0C1935)
+                    : isLuxury
+                        ? const Color(0xFF131316)
+                        : (isDark ? const Color(0xFF151F33) : const Color(0xFFF1F5F9)),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isMidnight
+                      ? const Color(0x88D4AF37)
+                      : isLuxury
+                          ? const Color(0x88C59B47)
+                          : borderColor,
+                ),
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildThemeOption(mode: ThemeMode.dark, current: currentMode, label: 'Dark Mood', icon: Icons.dark_mode_rounded),
-                  _buildThemeOption(mode: ThemeMode.light, current: currentMode, label: 'Light Mood', icon: Icons.light_mode_rounded),
-                  _buildThemeOption(mode: ThemeMode.system, current: currentMode, label: 'System', icon: Icons.brightness_auto_rounded),
+                  // Row 1: Standard Modes (Dark, Light, System)
+                  Row(
+                    children: [
+                      _buildVisualThemeOption(
+                        theme: AppVisualTheme.dark,
+                        current: currentVisual,
+                        label: 'Dark Mood',
+                        icon: Icons.dark_mode_rounded,
+                      ),
+                      const SizedBox(width: 4),
+                      _buildVisualThemeOption(
+                        theme: AppVisualTheme.light,
+                        current: currentVisual,
+                        label: 'Light Mood',
+                        icon: Icons.light_mode_rounded,
+                      ),
+                      const SizedBox(width: 4),
+                      _buildVisualThemeOption(
+                        theme: AppVisualTheme.system,
+                        current: currentVisual,
+                        label: 'System',
+                        icon: Icons.brightness_auto_rounded,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Row 2: Premium Themes (Midnight Gold - Image 2, Luxury Gold - Image 3)
+                  Row(
+                    children: [
+                      _buildVisualThemeOption(
+                        theme: AppVisualTheme.midnightGold,
+                        current: currentVisual,
+                        label: 'Midnight Gold',
+                        icon: Icons.auto_awesome_rounded,
+                        isPremium: true,
+                        premiumGradient: const LinearGradient(
+                          colors: [Color(0xFF0D2554), Color(0xFF1B3D7A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        goldBorderColor: const Color(0xFFD4AF37),
+                        goldAccentColor: const Color(0xFFF5D061),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildVisualThemeOption(
+                        theme: AppVisualTheme.luxuryGold,
+                        current: currentVisual,
+                        label: 'Luxury Gold',
+                        icon: Icons.workspace_premium_rounded,
+                        isPremium: true,
+                        premiumGradient: const LinearGradient(
+                          colors: [Color(0xFF1C1C20), Color(0xFF2C271E)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        goldBorderColor: const Color(0xFFC59B47),
+                        goldAccentColor: const Color(0xFFDFB76C),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             );
@@ -2318,26 +2415,46 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildThemeOption({
-    required ThemeMode mode,
-    required ThemeMode current,
+  Widget _buildVisualThemeOption({
+    required AppVisualTheme theme,
+    required AppVisualTheme current,
     required String label,
     required IconData icon,
+    bool isPremium = false,
+    LinearGradient? premiumGradient,
+    Color? goldBorderColor,
+    Color? goldAccentColor,
   }) {
-    final isSelected = mode == current;
+    final isSelected = theme == current;
     return Expanded(
       child: GestureDetector(
-        onTap: () => ThemeService.setThemeMode(mode),
+        onTap: () => ThemeService.setVisualTheme(theme),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0F3B82) : Colors.transparent,
+            gradient: isSelected && isPremium ? premiumGradient : null,
+            color: isSelected
+                ? (isPremium ? null : const Color(0xFF0F3B82))
+                : (isPremium
+                    ? (theme == AppVisualTheme.midnightGold
+                        ? const Color(0xFF0A1630).withValues(alpha: 0.5)
+                        : const Color(0xFF17171A).withValues(alpha: 0.5))
+                    : Colors.transparent),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? (goldBorderColor ?? const Color(0xFF0F3B82))
+                  : (isPremium
+                      ? (goldBorderColor?.withValues(alpha: 0.3) ?? Colors.transparent)
+                      : Colors.transparent),
+              width: isSelected ? 1.4 : 0.8,
+            ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF0F3B82).withValues(alpha: 0.35),
+                      color: (goldBorderColor ?? const Color(0xFF0F3B82))
+                          .withValues(alpha: isPremium ? 0.35 : 0.25),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -2350,16 +2467,44 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               Icon(
                 icon,
                 size: 18,
-                color: isSelected ? Colors.white : const Color(0xFF64748B),
+                color: isSelected
+                    ? (goldAccentColor ?? Colors.white)
+                    : (isPremium
+                        ? (goldAccentColor?.withValues(alpha: 0.75) ?? const Color(0xFFB5A48B))
+                        : const Color(0xFF64748B)),
               ),
               const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : const Color(0xFF64748B),
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isSelected
+                            ? (goldAccentColor ?? Colors.white)
+                            : (isPremium
+                                ? (goldAccentColor?.withValues(alpha: 0.85) ?? const Color(0xFFB5A48B))
+                                : const Color(0xFF64748B)),
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (isPremium) ...[
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.star_rounded,
+                      size: 11,
+                      color: isSelected
+                          ? (goldAccentColor ?? Colors.amber)
+                          : Colors.amber.withValues(alpha: 0.6),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

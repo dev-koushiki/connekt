@@ -16,8 +16,8 @@ import 'whatsapp_archived_screen.dart';
 import 'whatsapp_locked_screen.dart';
 import 'whatsapp_starred_screen.dart';
 import 'whatsapp_linked_devices_screen.dart';
-import 'whatsapp_payments_screen.dart';
 import 'whatsapp_settings_screen.dart';
+import 'chat_theme_screen.dart';
 import '../i18n/app_localizations.dart';
 
 class ChatsScreen extends StatefulWidget {
@@ -46,6 +46,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   final List<Map<String, dynamic>> _lockedConversations = [];
   final Set<String> _lockedChatIds = {};
   final Set<String> _archivedChatIds = {};
+  final Set<String> _locallyReadChatKeys = {'soumo naskar', 'soumo', '9830113038'};
   bool _isLoading = false;
 
   bool _isSameChat(Map<String, dynamic> a, Map<String, dynamic> b) {
@@ -127,8 +128,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       final prefs = await SharedPreferences.getInstance();
       final locked = prefs.getStringList('connekt_locked_chat_ids') ?? [];
       final archived = prefs.getStringList('connekt_archived_chat_ids') ?? [];
+      final readKeys = prefs.getStringList('connekt_read_chat_keys') ?? [];
       _lockedChatIds.addAll(locked.where((s) => s.trim().isNotEmpty));
       _archivedChatIds.addAll(archived.where((s) => s.trim().isNotEmpty));
+      _locallyReadChatKeys.addAll(readKeys.where((s) => s.trim().isNotEmpty));
     } catch (_) {}
   }
 
@@ -137,6 +140,7 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('connekt_locked_chat_ids', _lockedChatIds.toList());
       await prefs.setStringList('connekt_archived_chat_ids', _archivedChatIds.toList());
+      await prefs.setStringList('connekt_read_chat_keys', _locallyReadChatKeys.toList());
     } catch (_) {}
   }
 
@@ -264,6 +268,15 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       final List<Map<String, dynamic>> newArchived = [];
 
       for (final item in list) {
+        final id = (item['id'] ?? '').toString();
+        final name = (item['name'] ?? item['title'] ?? '').toString().toLowerCase().trim();
+        final target = (item['target'] ?? item['phone'] ?? '').toString().toLowerCase().trim();
+        if (_locallyReadChatKeys.contains(id) ||
+            _locallyReadChatKeys.contains(name) ||
+            (target.isNotEmpty && _locallyReadChatKeys.contains(target))) {
+          item['unread'] = 0;
+        }
+
         if (_isChatLocked(item)) {
           item['isLocked'] = true;
           _recordChatLocked(item);
@@ -326,6 +339,18 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       return;
     }
 
+    final convId = conv['id']?.toString();
+    final nameKey = (conv['name'] ?? conv['title'] ?? '').toString().toLowerCase().trim();
+    final targetKey = (conv['target'] ?? conv['phone'] ?? '').toString().toLowerCase().trim();
+
+    if (convId != null && convId.isNotEmpty) {
+      _locallyReadChatKeys.add(convId);
+      ApiService.markConversationAsRead(convId);
+    }
+    if (nameKey.isNotEmpty) _locallyReadChatKeys.add(nameKey);
+    if (targetKey.isNotEmpty) _locallyReadChatKeys.add(targetKey);
+    _saveFolderState();
+
     setState(() {
       conv['unread'] = 0;
     });
@@ -336,7 +361,6 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
         : (conv['name'] ?? conv['target'] ?? 'Chat')).toString();
     final contactPhone = (conv['target'] ?? conv['phone'] ?? '').toString();
     final avatar = (conv['avatar'] ?? '').toString();
-    final convId = conv['id']?.toString();
     final groupDesc = (conv['description'] ?? '').toString();
 
     await Navigator.of(context).push(
@@ -511,13 +535,30 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
   void _markSelectedAsRead(bool isRead) {
     setState(() {
       for (final conv in _conversations) {
-        final id = conv['id']?.toString() ?? conv['name'];
-        if (_selectedChatIds.contains(id)) {
+        final id = (conv['id'] ?? '').toString();
+        final name = (conv['name'] ?? conv['title'] ?? '').toString().toLowerCase().trim();
+        final target = (conv['target'] ?? conv['phone'] ?? '').toString().toLowerCase().trim();
+        if (_selectedChatIds.contains(id) ||
+            (name.isNotEmpty && _selectedChatIds.contains(name)) ||
+            (target.isNotEmpty && _selectedChatIds.contains(target))) {
           conv['unread'] = isRead ? 0 : 1;
+          if (isRead) {
+            if (id.isNotEmpty) {
+              _locallyReadChatKeys.add(id);
+              ApiService.markConversationAsRead(id);
+            }
+            if (name.isNotEmpty) _locallyReadChatKeys.add(name);
+            if (target.isNotEmpty) _locallyReadChatKeys.add(target);
+          } else {
+            if (id.isNotEmpty) _locallyReadChatKeys.remove(id);
+            if (name.isNotEmpty) _locallyReadChatKeys.remove(name);
+            if (target.isNotEmpty) _locallyReadChatKeys.remove(target);
+          }
         }
       }
       _exitSelectionMode();
     });
+    _saveFolderState();
   }
 
   void _lockSelectedChats() {
@@ -569,8 +610,18 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     setState(() {
       for (final c in _conversations) {
         c['unread'] = 0;
+        final id = (c['id'] ?? '').toString();
+        final name = (c['name'] ?? c['title'] ?? '').toString().toLowerCase().trim();
+        final target = (c['target'] ?? c['phone'] ?? '').toString().toLowerCase().trim();
+        if (id.isNotEmpty) {
+          _locallyReadChatKeys.add(id);
+          ApiService.markConversationAsRead(id);
+        }
+        if (name.isNotEmpty) _locallyReadChatKeys.add(name);
+        if (target.isNotEmpty) _locallyReadChatKeys.add(target);
       }
     });
+    _saveFolderState();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('All chats marked as read'),
@@ -601,16 +652,16 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
           MaterialPageRoute(builder: (_) => const WhatsAppStarredScreen()),
         );
         break;
-      case 'payments':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const WhatsAppPaymentsScreen()),
-        );
-        break;
       case 'archived':
         _openArchivedScreen();
         break;
       case 'locked':
         _openLockedScreen();
+        break;
+      case 'theme':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ChatThemeScreen()),
+        );
         break;
       case 'mark_all_read':
         _markAllAsRead();
@@ -2081,9 +2132,9 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
             const PopupMenuItem(value: 'new_broadcast', child: Text('New broadcast')),
             const PopupMenuItem(value: 'linked_devices', child: Text('Linked devices')),
             const PopupMenuItem(value: 'starred', child: Text('Starred messages')),
-            const PopupMenuItem(value: 'payments', child: Text('Payments')),
             const PopupMenuItem(value: 'archived', child: Text('Archived chats')),
             const PopupMenuItem(value: 'locked', child: Text('Locked chats')),
+            const PopupMenuItem(value: 'theme', child: Text('Chat theme')),
             const PopupMenuItem(value: 'mark_all_read', child: Text('Mark all as read')),
             const PopupMenuItem(value: 'settings', child: Text('Settings')),
           ],
@@ -2513,7 +2564,15 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                                       if (type == 'sticker') {
                                                         formatted = '💟 Sticker';
                                                       } else if (type == 'image') {
-                                                        formatted = '📷 Photo';
+                                                        final isVo = data['isViewOnce'] == true;
+                                                        final isOp = data['isOpened'] == true;
+                                                        formatted = isVo ? (isOp ? '① Opened' : '① Photo') : '📷 Photo';
+                                                      } else if (type == 'video') {
+                                                        final isVo = data['isViewOnce'] == true;
+                                                        final isOp = data['isOpened'] == true;
+                                                        formatted = isVo ? (isOp ? '① Opened' : '① Video') : '🎥 Video';
+                                                      } else if (type == 'media_album') {
+                                                        formatted = '🖼️ Photos & Videos';
                                                       } else if (type == 'voice') {
                                                         formatted = '🎤 Voice message';
                                                       } else if (type == 'audio') {
@@ -2524,6 +2583,8 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                                         formatted = '📍 Location';
                                                       } else if (type == 'contact') {
                                                         formatted = '👤 Contact';
+                                                      } else if (type == 'poll') {
+                                                        formatted = '📊 Poll: ${data['question'] ?? 'Poll'}';
                                                       }
                                                     } catch (_) {}
                                                   }

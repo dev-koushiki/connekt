@@ -18,11 +18,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'i18n/app_localizations.dart';
 import 'i18n/languages.dart';
 import 'services/i18n_service.dart';
+import 'services/chat_theme_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiConfig.loadHost();
   await ThemeService.init();
+  await ChatThemeService.init();
   await I18nService.init();
   runApp(const ConnektApp());
 }
@@ -119,9 +121,9 @@ class _ConnektAppState extends State<ConnektApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeService.themeModeNotifier,
-      builder: (context, currentThemeMode, _) {
+    return ValueListenableBuilder<AppVisualTheme>(
+      valueListenable: ThemeService.visualThemeNotifier,
+      builder: (context, currentVisualTheme, _) {
         return ValueListenableBuilder<Locale>(
           valueListenable: I18nService.localeNotifier,
           builder: (context, currentLocale, _) {
@@ -130,7 +132,7 @@ class _ConnektAppState extends State<ConnektApp> {
               debugShowCheckedModeBanner: false,
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
-              themeMode: currentThemeMode,
+              themeMode: ThemeService.themeModeNotifier.value,
               locale: currentLocale,
               supportedLocales: AppLanguages.supportedLocales,
               localizationsDelegates: const [

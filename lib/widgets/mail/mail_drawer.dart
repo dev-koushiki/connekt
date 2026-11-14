@@ -15,6 +15,7 @@ class MailDrawer extends StatelessWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback? onOpenContacts;
   final VoidCallback? onBackToHome;
+  final bool isBottomSheet;
 
   const MailDrawer({
     super.key,
@@ -28,7 +29,47 @@ class MailDrawer extends StatelessWidget {
     required this.onOpenSettings,
     this.onOpenContacts,
     this.onBackToHome,
+    this.isBottomSheet = false,
   });
+
+  /// Displays the Mail folders and labels as a bottom sheet sliding up from the bottom
+  static Future<void> showAsBottomSheet({
+    required BuildContext context,
+    required String userEmail,
+    required String selectedView,
+    required List<MailMessage> allMessages,
+    required List<MailLabel> labels,
+    required ValueChanged<String> onSelectView,
+    required VoidCallback onCreateLabel,
+    required ValueChanged<MailLabel> onDeleteLabel,
+    required VoidCallback onOpenSettings,
+    VoidCallback? onOpenContacts,
+    VoidCallback? onBackToHome,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return FractionallySizedBox(
+          heightFactor: 0.85,
+          child: MailDrawer(
+            userEmail: userEmail,
+            selectedView: selectedView,
+            allMessages: allMessages,
+            labels: labels,
+            onSelectView: onSelectView,
+            onCreateLabel: onCreateLabel,
+            onDeleteLabel: onDeleteLabel,
+            onOpenSettings: onOpenSettings,
+            onOpenContacts: onOpenContacts,
+            onBackToHome: onBackToHome,
+            isBottomSheet: true,
+          ),
+        );
+      },
+    );
+  }
 
   int _countForView(String key) {
     switch (key) {
@@ -71,52 +112,73 @@ class MailDrawer extends StatelessWidget {
     final textPrimary = AppTheme.getTextPrimary(context);
     final textSecondary = AppTheme.getTextSecondary(context);
 
-    return Drawer(
-      backgroundColor: bgColor,
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppTheme.brandBlue.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.mail_rounded, color: AppTheme.brandBlue, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Connekt Mail',
-                          style: TextStyle(
-                            color: textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          userEmail,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: textSecondary, fontSize: 11.5),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+    final content = SafeArea(
+      top: !isBottomSheet,
+      child: Column(
+        children: [
+          if (isBottomSheet) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: Container(
+                width: 44,
+                height: 4.5,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
               ),
             ),
-            const Divider(height: 1),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
+          ],
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppTheme.brandBlue.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.mail_rounded, color: AppTheme.brandBlue, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Connekt Mail',
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              userEmail,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: textSecondary, fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isBottomSheet)
+                        IconButton(
+                          icon: Icon(Icons.close_rounded, color: textSecondary, size: 22),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
 
             _drawerItem(
               context,
@@ -314,6 +376,22 @@ class MailDrawer extends StatelessWidget {
           ],
         ),
       ),
+    ],
+  ),
+);
+
+    if (isBottomSheet) {
+      return Material(
+        color: bgColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        clipBehavior: Clip.antiAlias,
+        child: content,
+      );
+    }
+
+    return Drawer(
+      backgroundColor: bgColor,
+      child: content,
     );
   }
 

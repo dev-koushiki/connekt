@@ -649,6 +649,64 @@ class ApiService {
     }
   }
 
+  /// Mark all messages in a conversation as read
+  static Future<bool> markConversationAsRead(String conversationId) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.post(
+          Uri.parse('$base/chats/$conversationId/read'),
+          headers: _headers(token),
+        );
+      });
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Update group details (title, description, avatar)
+  static Future<bool> updateGroupDetails(String conversationId, {String? title, String? description, String? avatarUrl}) async {
+    try {
+      final token = await getToken();
+      final payload = <String, dynamic>{};
+      if (title != null) payload['title'] = title;
+      if (description != null) payload['description'] = description;
+      if (avatarUrl != null) payload['avatarUrl'] = avatarUrl;
+
+      final res = await _safeRequest((base) {
+        return http.patch(
+          Uri.parse('$base/chats/group/$conversationId'),
+          headers: _headers(token),
+          body: jsonEncode(payload),
+        );
+      });
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Update group participant role (admin or member)
+  static Future<bool> setGroupParticipantRole(String conversationId, {required String targetIdentifier, required String role}) async {
+    try {
+      final token = await getToken();
+      final res = await _safeRequest((base) {
+        return http.patch(
+          Uri.parse('$base/chats/group/$conversationId/role'),
+          headers: _headers(token),
+          body: jsonEncode({
+            'targetIdentifier': targetIdentifier,
+            'role': role,
+          }),
+        );
+      });
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Get full chat history details including conversation metadata and participants
   static Future<Map<String, dynamic>?> getChatDetails(String target) async {
     try {

@@ -154,6 +154,13 @@ class VoiceAudioService {
     } catch (_) {}
   }
 
+  static Future<void> setPlaybackRate(double rate) async {
+    if (kIsWeb) return;
+    try {
+      await _channel.invokeMethod<void>('setPlaybackRate', {'rate': rate});
+    } catch (_) {}
+  }
+
   static Future<VoicePlaybackStatus> getPlaybackStatus() async {
     if (kIsWeb) {
       return const VoicePlaybackStatus(isPlaying: false, positionMs: 0, durationMs: 0);

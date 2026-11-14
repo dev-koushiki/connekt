@@ -3,6 +3,7 @@ import '../config/app_theme.dart';
 import '../i18n/app_localizations.dart';
 import '../services/i18n_service.dart';
 import '../widgets/language_selector_sheet.dart';
+import 'chat_theme_screen.dart';
 
 class WhatsAppSettingsScreen extends StatefulWidget {
   final VoidCallback? onClearAllChats;
@@ -39,67 +40,6 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
         );
       }
     });
-  }
-
-  void _showWallpaperPicker() {
-    final colors = [
-      const Color(0xFF0F172A), // Slate
-      const Color(0xFF1E3A8A), // Blue
-      const Color(0xFF064E3B), // Emerald
-      const Color(0xFF701A75), // Fuchsia
-      const Color(0xFF451A03), // Brown
-      const Color(0xFF18181B), // Dark Zinc
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppTheme.getCardColor(context),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Select Chat Wallpaper',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.getTextPrimary(context),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: colors.map((c) {
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Wallpaper updated!')),
-                    );
-                  },
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: c,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white24, width: 2),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showChatHistoryDialog() {
@@ -187,11 +127,16 @@ class _WhatsAppSettingsScreenState extends State<WhatsAppSettingsScreen> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.wallpaper_rounded, color: Color(0xFF1D4ED8)),
-                  title: Text('Wallpaper', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
-                  subtitle: Text('Change chat background color & doodles', style: TextStyle(color: textSecondary, fontSize: 12)),
+                  leading: const Icon(Icons.palette_rounded, color: Color(0xFF1D4ED8)),
+                  title: Text('Chat theme & Wallpaper', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
+                  subtitle: Text('Wallpapers, bubbles, AI themes & doodles', style: TextStyle(color: textSecondary, fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: _showWallpaperPicker,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ChatThemeScreen()),
+                    );
+                  },
                 ),
               ],
             ),

@@ -33,8 +33,17 @@ router.get('/', requireAuth, chatController.getConversations);
 // Create a new group conversation
 router.post('/group', requireAuth, chatController.createGroup);
 
+// Update group details (title, description, avatar)
+router.patch('/group/:conversationId', requireAuth, chatController.updateGroupDetails);
+
+// Update group participant role (admin / member)
+router.patch('/group/:conversationId/role', requireAuth, chatController.setParticipantRole);
+
 // Respond to group invitation (accept or decline)
 router.post('/:conversationId/respond-invite', requireAuth, chatController.respondToInvite);
+
+// Mark conversation as read
+router.post('/:conversationId/read', requireAuth, chatController.markConversationAsRead);
 
 // Get message history with a contact / phone / conversation
 router.get('/:target/messages', requireAuth, chatController.getMessages);
