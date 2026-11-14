@@ -211,11 +211,16 @@ class _MailScreenState extends State<MailScreen> {
     );
   }
 
-  int _unreadCountForCategory(String cat) {
-    if (cat == 'inbox') {
-      return _messages.where((m) => m.folder == 'inbox' && m.isUnread).length;
-    }
-    return _messages.where((m) => m.folder == 'inbox' && m.category == cat && m.isUnread).length;
+  int _mailCountForCategory(String cat) {
+    final matching = _messages.where((m) {
+      if (m.folder != 'inbox') return false;
+      if (cat != 'inbox' && m.category != cat) return false;
+      return true;
+    }).toList();
+
+    return _settings.conversationView
+        ? MailQueryFilter.groupIntoThreads(matching, conversationView: true).length
+        : matching.length;
   }
 
   String _viewTitle() {
@@ -999,7 +1004,7 @@ class _MailScreenState extends State<MailScreen> {
     final borderColor = AppTheme.getBorderColor(context);
 
     final threads = _visibleThreads;
-    final inInboxGroup = ['inbox', 'primary', 'social', 'promotions', 'updates', 'forums'].contains(_selectedView) &&
+    final inInboxGroup = ['inbox', 'primary', 'social', 'updates', 'forums'].contains(_selectedView) &&
         _effectiveSearchQuery.isEmpty;
 
     return Scaffold(
@@ -1319,7 +1324,6 @@ class _MailScreenState extends State<MailScreen> {
     const categories = [
       {'id': 'primary', 'label': 'Primary', 'icon': Icons.inbox_rounded},
       {'id': 'social', 'label': 'Social', 'icon': Icons.people_outline_rounded},
-      {'id': 'promotions', 'label': 'Promotions', 'icon': Icons.local_offer_outlined},
       {'id': 'updates', 'label': 'Updates', 'icon': Icons.info_outline_rounded},
       {'id': 'forums', 'label': 'Forums', 'icon': Icons.forum_outlined},
       {'id': 'inbox', 'label': 'All', 'icon': Icons.all_inbox_rounded},
@@ -1336,7 +1340,7 @@ class _MailScreenState extends State<MailScreen> {
           final cat = categories[index];
           final id = cat['id'] as String;
           final active = _selectedView == id;
-          final unread = _unreadCountForCategory(id);
+          final count = _mailCountForCategory(id);
           return ChoiceChip(
             avatar: Icon(
               cat['icon'] as IconData,
@@ -1344,7 +1348,7 @@ class _MailScreenState extends State<MailScreen> {
               color: active ? Colors.white : AppTheme.brandBlue,
             ),
             label: Text(
-              unread > 0 ? '${cat['label']} ($unread)' : '${cat['label']}',
+              count > 0 ? '${cat['label']} ($count)' : '${cat['label']}',
               style: TextStyle(
                 color: active ? Colors.white : textSecondary,
                 fontSize: 12.5,

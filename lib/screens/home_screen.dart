@@ -82,6 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isProfessional = false;
   List<QuickNoteItem> _quickNotes = [];
   List<ReminderItem> _reminders = [];
+  Timer? _clockTimer;
 
   @override
   void initState() {
@@ -89,6 +90,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _isProfessional = widget.user?.currentMode == 'professional';
     _loadLocalData();
     _fetchRemindersFromServer();
+    _clockTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -1426,6 +1436,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSchedulerCard(BuildContext context) {
+    final now = DateTime.now();
+    final hour = now.hour % 12 == 0 ? 12 : now.hour % 12;
+    final ampm = now.hour >= 12 ? 'PM' : 'AM';
+    final formattedTime = '${hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} $ampm';
+    const monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final monthYearText = '${monthNames[now.month - 1]} ${now.year}';
+
     return InkWell(
       onTap: () {
         Navigator.of(context).push(
@@ -1435,13 +1455,16 @@ class _HomeScreenState extends State<HomeScreen> {
               onOpenMeetings: () {
                 widget.onNavigateToTab?.call(1);
               },
+              onRemindersChanged: () {
+                _fetchRemindersFromServer();
+              },
             ),
           ),
         );
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: const Color(0xFFE8EFF9),
           borderRadius: BorderRadius.circular(16),
@@ -1450,16 +1473,43 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Schedule',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF475569),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Schedule',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F3B82).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.access_time_rounded, size: 10, color: Color(0xFF0F3B82)),
+                      const SizedBox(width: 3),
+                      Text(
+                        formattedTime,
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F3B82),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            // Miniature Calendar Graphic (Aug / Current month representation)
+            const SizedBox(height: 5),
+            // Miniature Calendar Graphic (Live month and date)
             Expanded(
               child: Center(
                 child: Container(
@@ -1475,7 +1525,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   child: Column(
                     children: [
                       // Spiral Binding Dots Representation
@@ -1493,39 +1543,39 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       // Month / Year Header
-                      const Row(
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            '8',
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                            '${now.month}',
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
                           ),
                           Text(
-                            'Aug 2026',
-                            style: TextStyle(fontSize: 8.5, color: Color(0xFF64748B)),
+                            monthYearText,
+                            style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       // Day headers: S M T W T F S
                       const Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          Text('S', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
-                          Text('M', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
-                          Text('T', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
-                          Text('W', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
-                          Text('T', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
-                          Text('F', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
-                          Text('S', style: TextStyle(fontSize: 7.5, color: Color(0xFF94A3B8))),
+                          Text('S', style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
+                          Text('M', style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
+                          Text('T', style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
+                          Text('W', style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
+                          Text('T', style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
+                          Text('F', style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
+                          Text('S', style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
                         ],
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       // Mini calendar grid
                       Expanded(
-                        child: _buildMiniCalendarGrid(),
+                        child: _buildMiniCalendarGrid(now),
                       ),
                     ],
                   ),
@@ -1538,15 +1588,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMiniCalendarGrid() {
-    // 5 rows representing calendar dates with realistic highlights
-    final grid = [
-      [' ', ' ', ' ', '1', '2', '3', '4'],
-      ['5', '6', '7', '8', '9', '10', '11'],
-      ['12', '13', '14', '15', '16', '17', '18'],
-      ['19', '20', '21', '22', '23', '24', '25'],
-      ['26', '27', '28', '29', '30', '31', ' '],
-    ];
+  Widget _buildMiniCalendarGrid(DateTime now) {
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final firstWeekday = DateTime(now.year, now.month, 1).weekday; // 1 = Mon, 7 = Sun
+    final startOffset = firstWeekday % 7; // Sunday = 0, Monday = 1 ... Saturday = 6
+
+    final List<List<String>> grid = [];
+    List<String> currentRow = [];
+
+    for (int i = 0; i < startOffset; i++) {
+      currentRow.add('');
+    }
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      currentRow.add('$day');
+      if (currentRow.length == 7) {
+        grid.add(currentRow);
+        currentRow = [];
+      }
+    }
+
+    if (currentRow.isNotEmpty) {
+      while (currentRow.length < 7) {
+        currentRow.add('');
+      }
+      grid.add(currentRow);
+    }
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1554,27 +1621,50 @@ class _HomeScreenState extends State<HomeScreen> {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: row.map((date) {
-            final isHighlightRed = date == '8' || date == '21';
-            final isHighlightBlue = date == '14';
+            if (date.isEmpty) {
+              return const SizedBox(width: 14, height: 13);
+            }
+
+            final dayNum = int.tryParse(date);
+            final isToday = dayNum != null && dayNum == now.day;
+            final hasReminder = dayNum != null &&
+                _reminders.any((r) {
+                  final dt = r.dueDateTime;
+                  return dt != null &&
+                      dt.year == now.year &&
+                      dt.month == now.month &&
+                      dt.day == dayNum &&
+                      !r.isCompleted;
+                });
+
+            Color bgColor = Colors.transparent;
+            Color textColor = const Color(0xFF334155);
+            FontWeight fontWeight = FontWeight.w500;
+
+            if (isToday) {
+              bgColor = const Color(0xFF0F3B82);
+              textColor = Colors.white;
+              fontWeight = FontWeight.bold;
+            } else if (hasReminder) {
+              bgColor = const Color(0xFFE53935).withValues(alpha: 0.18);
+              textColor = const Color(0xFFE53935);
+              fontWeight = FontWeight.bold;
+            }
 
             return Container(
               width: 14,
-              height: 14,
+              height: 13,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isHighlightRed
-                    ? const Color(0xFFE53935).withValues(alpha: 0.18)
-                    : (isHighlightBlue ? const Color(0xFF4C85E6).withValues(alpha: 0.2) : Colors.transparent),
+                color: bgColor,
                 borderRadius: BorderRadius.circular(3),
               ),
               child: Text(
                 date,
                 style: TextStyle(
-                  fontSize: 7.5,
-                  fontWeight: (isHighlightRed || isHighlightBlue) ? FontWeight.bold : FontWeight.w500,
-                  color: isHighlightRed
-                      ? const Color(0xFFE53935)
-                      : (isHighlightBlue ? const Color(0xFF0F3B82) : const Color(0xFF334155)),
+                  fontSize: 7.0,
+                  fontWeight: fontWeight,
+                  color: textColor,
                 ),
               ),
             );

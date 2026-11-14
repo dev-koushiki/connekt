@@ -252,7 +252,8 @@ class _WhatsAppLockedScreenState extends State<WhatsAppLockedScreen> {
                         MaterialPageRoute(
                           builder: (_) => ChatScreen(
                             conversationId: chat['id']?.toString(),
-                            contactName: (chat['target'] ?? chat['name'] ?? '').toString(),
+                            contactName: (chat['name'] ?? chat['target'] ?? '').toString(),
+                            contactPhone: (chat['target'] ?? chat['phone'] ?? '').toString(),
                             avatarUrl: (chat['avatar'] ?? '').toString(),
                             showBackButton: true,
                             isGroup: chat['isGroup'] == true,

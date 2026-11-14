@@ -33,13 +33,12 @@ class MailDrawer extends StatelessWidget {
   int _countForView(String key) {
     switch (key) {
       case 'inbox':
-        return allMessages.where((m) => m.folder == 'inbox' && m.isUnread).length;
+        return allMessages.where((m) => m.folder == 'inbox').length;
       case 'primary':
       case 'social':
-      case 'promotions':
       case 'updates':
       case 'forums':
-        return allMessages.where((m) => m.folder == 'inbox' && m.category == key && m.isUnread).length;
+        return allMessages.where((m) => m.folder == 'inbox' && m.category == key).length;
       case 'starred':
         return allMessages.where((m) => m.folder != 'trash' && m.folder != 'spam' && m.isStarred).length;
       case 'snoozed':
@@ -141,13 +140,6 @@ class MailDrawer extends StatelessWidget {
               icon: Icons.people_outline_rounded,
               label: context.tr('mails.social'),
               count: _countForView('social'),
-            ),
-            _drawerItem(
-              context,
-              keyId: 'promotions',
-              icon: Icons.local_offer_outlined,
-              label: context.tr('mails.promotions'),
-              count: _countForView('promotions'),
             ),
             _drawerItem(
               context,

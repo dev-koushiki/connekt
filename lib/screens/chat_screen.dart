@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import '../services/voice_audio_service.dart';
 import '../widgets/safe_avatar.dart';
 import '../widgets/translatable_text_widget.dart';
 import '../widgets/whatsapp_emoji_sticker_picker.dart';
+import 'image_preview_send_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String contactName;
@@ -22,6 +24,7 @@ class ChatScreen extends StatefulWidget {
   final List<String> initialMembers;
   final String? conversationId;
   final String groupDescription;
+  final String? contactPhone;
 
   const ChatScreen({
     super.key,
@@ -32,6 +35,7 @@ class ChatScreen extends StatefulWidget {
     this.initialMembers = const ['You', 'Soumo', 'Lena Rivers', 'David Kim'],
     this.conversationId,
     this.groupDescription = '',
+    this.contactPhone,
   });
 
   @override
@@ -42,6 +46,16 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
+
+  String get _effectiveTarget {
+    if (widget.conversationId != null && widget.conversationId!.isNotEmpty) {
+      return widget.conversationId!;
+    }
+    if (widget.contactPhone != null && widget.contactPhone!.isNotEmpty) {
+      return widget.contactPhone!;
+    }
+    return widget.contactName;
+  }
 
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
@@ -137,9 +151,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   Future<void> _loadHistory({bool silent = false}) async {
     try {
-      final lookupTarget = (widget.conversationId != null && widget.conversationId!.isNotEmpty)
-          ? widget.conversationId!
-          : widget.contactName;
+      final lookupTarget = _effectiveTarget;
 
       Map<String, dynamic>? details;
       List<Map<String, dynamic>> rawHistory;
@@ -428,9 +440,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   Future<void> _dispatchToBackend(String payloadText, {required String tempId}) async {
     try {
-      final target = (widget.conversationId != null && widget.conversationId!.isNotEmpty)
-          ? widget.conversationId!
-          : widget.contactName;
+      final target = _effectiveTarget;
       final res = await ApiService.sendChatMessage(target, payloadText);
       final serverId = res['id']?.toString();
 
@@ -453,7 +463,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       }
 
       if (mounted && res['smsDispatched'] == true) {
-        final phone = res['recipientPhone'] ?? widget.contactName;
+        final phone = res['recipientPhone'] ?? widget.contactPhone ?? widget.contactName;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -846,39 +856,42 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 24),
 
-                // 2 Rows x 3 Columns WhatsApp Attachment Grid (Document, Camera, Gallery, Audio, Location, Contact)
+                // 2 Rows x 3 Columns CONNEKT Theme Attachment Grid (Document, Camera, Gallery, Audio, Location, Contact)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildAttachmentItem(
-                      icon: Icons.insert_drive_file_rounded,
+                      icon: Icons.description_rounded,
                       label: 'Document',
-                      color: const Color(0xFF7F3DFF),
+                      gradient: const [Color(0xFF4338CA), Color(0xFF6366F1)],
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickDocument();
                       },
                       textColor: labelColor,
+                      isDark: isDark,
                     ),
                     _buildAttachmentItem(
-                      icon: Icons.camera_alt_rounded,
+                      icon: Icons.photo_camera_rounded,
                       label: 'Camera',
-                      color: const Color(0xFFE91E63),
+                      gradient: const [Color(0xFF1E40AF), Color(0xFF2563EB)],
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickImage(ImageSource.camera);
                       },
                       textColor: labelColor,
+                      isDark: isDark,
                     ),
                     _buildAttachmentItem(
-                      icon: Icons.photo_library_rounded,
+                      icon: Icons.image_rounded,
                       label: 'Gallery',
-                      color: const Color(0xFF5B51D8),
+                      gradient: const [Color(0xFF0284C7), Color(0xFF38BDF8)],
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickImage(ImageSource.gallery);
                       },
                       textColor: labelColor,
+                      isDark: isDark,
                     ),
                   ],
                 ),
@@ -889,32 +902,35 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     _buildAttachmentItem(
                       icon: Icons.headphones_rounded,
                       label: 'Audio',
-                      color: const Color(0xFFF58A07),
+                      gradient: const [Color(0xFF334155), Color(0xFF64748B)],
                       onTap: () {
                         Navigator.pop(ctx);
                         _pickAudio();
                       },
                       textColor: labelColor,
+                      isDark: isDark,
                     ),
                     _buildAttachmentItem(
                       icon: Icons.location_on_rounded,
                       label: 'Location',
-                      color: const Color(0xFF00A86B),
+                      gradient: const [Color(0xFF0F766E), Color(0xFF14B8A6)],
                       onTap: () {
                         Navigator.pop(ctx);
                         _sendLocation();
                       },
                       textColor: labelColor,
+                      isDark: isDark,
                     ),
                     _buildAttachmentItem(
                       icon: Icons.person_rounded,
                       label: 'Contact',
-                      color: const Color(0xFF0084FF),
+                      gradient: const [Color(0xFF1D4ED8), Color(0xFF60A5FA)],
                       onTap: () {
                         Navigator.pop(ctx);
                         _sendContact();
                       },
                       textColor: labelColor,
+                      isDark: isDark,
                     ),
                   ],
                 ),
@@ -929,9 +945,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   Widget _buildAttachmentItem({
     required IconData icon,
     required String label,
-    required Color color,
+    required List<Color> gradient,
     required VoidCallback onTap,
     required Color textColor,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -939,27 +956,30 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 60,
-            height: 60,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
-              color: color,
+              gradient: LinearGradient(
+                colors: gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: color.withValues(alpha: 0.55),
-                  blurRadius: 18,
-                  spreadRadius: 1,
+                  color: gradient.first.withValues(alpha: isDark ? 0.35 : 0.22),
+                  blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Icon(icon, color: Colors.white, size: 28),
+            child: Icon(icon, color: Colors.white, size: 26),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 9),
           Text(
             label,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w600,
               color: textColor,
             ),
@@ -1006,18 +1026,31 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     try {
       final picked = await _imagePicker.pickImage(
         source: source,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 85,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 90,
       );
 
       if (picked != null) {
+        if (!mounted) return;
+        final result = await Navigator.of(context).push<ImageSendResult>(
+          MaterialPageRoute(
+            builder: (_) => ImagePreviewSendScreen(
+              imagePath: picked.path,
+              contactName: widget.contactName,
+            ),
+          ),
+        );
+
+        if (result == null) return; // User cancelled or went back
+
         final name = picked.name;
-        final bytes = await picked.readAsBytes();
+        final file = File(result.imagePath);
+        final bytes = await file.readAsBytes();
         final sizeStr = _formatFileSize(bytes.length);
 
         String? uploadedUrl;
-        final upRes = await ApiService.uploadChatFile(picked.path, name);
+        final upRes = await ApiService.uploadChatFile(result.imagePath, name);
         uploadedUrl = upRes?['url'];
 
         _sendRichMessage({
@@ -1025,6 +1058,14 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
           'name': name,
           'size': sizeStr,
           'url': uploadedUrl ?? '',
+          'localPath': result.imagePath,
+          'caption': result.caption,
+          'isViewOnce': result.isViewOnce,
+          'isHd': result.isHd,
+          'filter': result.filterName,
+          'overlayText': result.overlayText,
+          'stickerEmoji': result.stickerEmoji,
+          'rotationQuarterTurns': result.rotationQuarterTurns,
         });
       }
     } catch (e) {

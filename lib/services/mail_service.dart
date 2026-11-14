@@ -152,7 +152,7 @@ class MailService {
         snippet: 'All systems nominal with 99.98% uptime. Try swiping messages left or right to archive or delete.',
         folder: 'inbox',
         originalFolder: 'inbox',
-        category: 'promotions',
+        category: 'updates',
         labels: const [],
         isUnread: false,
         isStarred: false,

@@ -331,7 +331,10 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
     });
 
     final bool isGroup = conv['isGroup'] == true || conv['type'] == 'group';
-    final targetName = (isGroup ? (conv['name'] ?? conv['title'] ?? 'Group') : (conv['target'] ?? conv['name'] ?? 'Chat')).toString();
+    final displayName = (isGroup
+        ? (conv['name'] ?? conv['title'] ?? 'Group')
+        : (conv['name'] ?? conv['target'] ?? 'Chat')).toString();
+    final contactPhone = (conv['target'] ?? conv['phone'] ?? '').toString();
     final avatar = (conv['avatar'] ?? '').toString();
     final convId = conv['id']?.toString();
     final groupDesc = (conv['description'] ?? '').toString();
@@ -340,7 +343,8 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           conversationId: convId,
-          contactName: targetName,
+          contactName: displayName,
+          contactPhone: contactPhone,
           groupDescription: groupDesc,
           avatarUrl: avatar,
           showBackButton: true,
@@ -1526,11 +1530,13 @@ class _ChatsScreenState extends State<ChatsScreen> with SingleTickerProviderStat
                                         return;
                                       }
                                       final target = username.isNotEmpty ? username : (phone.isNotEmpty ? phone : name);
+                                      final displayName = name.isNotEmpty ? name : target;
                                       Navigator.pop(ctx);
                                       await Navigator.of(this.context).push(
                                         MaterialPageRoute(
                                           builder: (_) => ChatScreen(
-                                            contactName: target,
+                                            contactName: displayName,
+                                            contactPhone: phone.isNotEmpty ? phone : (username.isNotEmpty ? username : ''),
                                             avatarUrl: avatarUrl,
                                             showBackButton: true,
                                           ),
